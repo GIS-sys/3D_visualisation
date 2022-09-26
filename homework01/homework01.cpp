@@ -66,6 +66,11 @@ int main(int argc, char* argv[])
 	GLuint MatrixPyramidID = glGetUniformLocation(programTriangle1ID, "MVP");
 	*/
 
+	// create memory for vertices
+	GLuint VertexArrayID;
+	glGenVertexArrays(1, &VertexArrayID);
+	glBindVertexArray(VertexArrayID);
+
 	// Angle of view: 45, ratio: 1:1, display distance: 0.1 <-> 100
 	glm::mat4 Projection = glm::perspective(glm::radians(45.0f), 1.0f / 1.0f, 0.1f, 100.0f);
 	// Camera: pos(4, 3, 3), look(0, 0, 0), head(0, 1, 0)
@@ -84,11 +89,6 @@ int main(int argc, char* argv[])
 	//MVP = View * Model * Projection;
 	//MVP = Model * Projection * View;
 	//MVP = Model * View * Projection;
-
-	// create memory for vertices
-	GLuint VertexArrayID;
-	glGenVertexArrays(1, &VertexArrayID);
-	glBindVertexArray(VertexArrayID);
 
 	// Create models
 	// Triangle1
