@@ -1,9 +1,4 @@
-// glVertexAttribPointer: normalised - what is it? (193)
-// Shaders - how do they work?
-// GLuint MatrixID = glGetUniformLocation (65) - what for?
 // play with order of multiplication glm::mat4 MVP (79)
-// shaders glUseProgram 184 - why?
-// 202 glDrawArrays - how does it know what to use?
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -52,6 +47,9 @@ int main(int argc, char* argv[])
 
 	// without it random object will be displyed, not closest
 	glEnable(GL_DEPTH_TEST);
+	// without it there is no transparency
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	// create memory for vertexes
 	GLuint VertexArrayID;
@@ -64,7 +62,7 @@ int main(int argc, char* argv[])
    	std::string cwd = dir;
 	GLuint programID = LoadShaders((cwd + "/../homework01/TransformVertexShader.vertexshader").c_str(),
 								   (cwd + "/../homework01/TextureFragmentShader.fragmentshader").c_str());
-	GLuint MatrixID = glGetUniformLocation(programID, "MVP"); // %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	GLuint MatrixID = glGetUniformLocation(programID, "MVP");
 
 	// Angle of view: 45, ratio: 1:1, display distance: 0.1 <-> 100
 	glm::mat4 Projection = glm::perspective(glm::radians(45.0f), 1.0f / 1.0f, 0.1f, 100.0f);
@@ -181,10 +179,9 @@ int main(int argc, char* argv[])
 		// Clear screen
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		// Use our shader // %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+		// Use our shader
 		glUseProgram(programID);
-		// Send our transformation to the currently bound shader, 
-		// in the "MVP" uniform
+		// Send our transformation
 		glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
 
 		// Enable buffer with attribute - coordinates
@@ -200,7 +197,7 @@ int main(int argc, char* argv[])
 		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
 
 		// Draw the triangle !
-		glDrawArrays(GL_TRIANGLES, 0, 12*3); // 12*3 indices starting at 0 -> 12 triangles
+		glDrawArrays(GL_TRIANGLES, 0, 12 * 3);
 
 		glDisableVertexAttribArray(0);
 		glDisableVertexAttribArray(1);
