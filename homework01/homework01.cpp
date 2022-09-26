@@ -1,17 +1,27 @@
+// play with order of multiplication glm::mat4 MVP (79)
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string>
+#include <chrono>
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 GLFWwindow* window;
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/transform.hpp>
 using namespace glm;
 
 #include <common/shader.hpp>
 #include <common/texture.hpp>
+
+
+long long current_ms() {
+	using namespace std::chrono;
+	return static_cast<long long>(duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count());
+}
 
 int main(int argc, char* argv[])
 {
@@ -27,7 +37,7 @@ int main(int argc, char* argv[])
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-	window = glfwCreateWindow( 512, 512, "Homework 1", NULL, NULL);
+	window = glfwCreateWindow( 1024, 1024, "Homework 1", NULL, NULL);
 	if( window == NULL ){
 		fprintf( stderr, "Failed to open GLFW window.\n" );
 		glfwTerminate();
@@ -42,209 +52,210 @@ int main(int argc, char* argv[])
 		return -1;
 	}
 
-	// Ensure we can capture the escape key being pressed below
-	glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
+	// without it random object will be displyed, not closest
+	glEnable(GL_DEPTH_TEST);
+	// without it there is no transparency
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glDisable(GL_CULL_FACE);
+	// edge case for transparent
+	glDepthFunc(GL_LEQUAL);
 
-	glClearColor(0.0f, 0.0f, 0.4f, 0.0f);  // no need
-	//glEnable(GL_DEPTH_TEST);  // no need ?????????????????????????????????????????????????????????????????????????
-	//glDepthFunc(GL_LESS);  // no need
+	// Load shaders
+	char dir[1024];
+   	getcwd( dir, sizeof( dir ) );
+   	std::string cwd = dir;
+	GLuint programTriangle1ID = LoadShaders((cwd + "/../homework01/Triangle1.vertexshader").c_str(),
+								   (cwd + "/../homework01/Triangle1.fragmentshader").c_str());
+	GLuint MatrixTriangle1ID = glGetUniformLocation(programTriangle1ID, "MVP");
+	GLuint programTriangle2ID = LoadShaders((cwd + "/../homework01/Triangle2.vertexshader").c_str(),
+								   (cwd + "/../homework01/Triangle2.fragmentshader").c_str());
+	GLuint MatrixTriangle2ID = glGetUniformLocation(programTriangle1ID, "MVP");
+	GLuint programPyramidID = LoadShaders((cwd + "/../homework01/Pyramid.vertexshader").c_str(),
+								   (cwd + "/../homework01/Pyramid.fragmentshader").c_str());
+	GLuint MatrixPyramidID = glGetUniformLocation(programTriangle1ID, "MVP");
 
+	// create memory for vertices
 	GLuint VertexArrayID;
 	glGenVertexArrays(1, &VertexArrayID);
 	glBindVertexArray(VertexArrayID);
 
-	// Create and compile our GLSL program from the shaders
-	char dir[1024];
-   	getcwd( dir, sizeof( dir ) );
-   	std::string cwd = dir;
-	GLuint programID = LoadShaders((cwd + "/../homework01/TransformVertexShader.vertexshader").c_str(),
-								   (cwd + "/../homework01/TextureFragmentShader.fragmentshader").c_str());
-
-	// Get a handle for our "MVP" uniform
-	GLuint MatrixID = glGetUniformLocation(programID, "MVP");
-
-	// Projection matrix : 45� Field of View, 4:3 ratio, display range : 0.1 unit <-> 100 units
-	glm::mat4 Projection = glm::perspective(glm::radians(45.0f), 4.0f / 3.0f, 0.1f, 100.0f);
-	// Camera matrix
-	glm::mat4 View       = glm::lookAt(
-								glm::vec3(4,3,3), // Camera is at (4,3,3), in World Space
-								glm::vec3(0,0,0), // and looks at the origin
-								glm::vec3(0,1,0)  // Head is up (set to 0,-1,0 to look upside-down)
-						   );
-	// Model matrix : an identity matrix (model will be at the origin)
-	glm::mat4 Model      = glm::mat4(1.0f);
-	// Our ModelViewProjection : multiplication of our 3 matrices
-	glm::mat4 MVP        = Projection * View * Model; // Remember, matrix multiplication is the other way around
-
-	/*
-	// Load the texture using any two methods
-	//GLuint Texture = loadBMP_custom("uvtemplate.bmp");
-	GLuint Texture = loadDDS((cwd + "/../homework01/uvtemplate.DDS").c_str());
-	
-	// Get a handle for our "myTextureSampler" uniform
-	GLuint TextureID  = glGetUniformLocation(programID, "myTextureSampler");
-	*/
-
-	// Our vertices. Tree consecutive floats give a 3D vertex; Three consecutive vertices give a triangle.
-	// A cube has 6 faces with 2 triangles each, so this makes 6*2=12 triangles, and 12*3 vertices
-	static const GLfloat g_vertex_buffer_data[] = { 
-		-1.0f,-1.0f,-1.0f,
-		-1.0f,-1.0f, 1.0f,
-		-1.0f, 1.0f, 1.0f,
-		 1.0f, 1.0f,-1.0f,
-		-1.0f,-1.0f,-1.0f,
-		-1.0f, 1.0f,-1.0f,
-		 1.0f,-1.0f, 1.0f,
-		-1.0f,-1.0f,-1.0f,
-		 1.0f,-1.0f,-1.0f,
-		 1.0f, 1.0f,-1.0f,
-		 1.0f,-1.0f,-1.0f,
-		-1.0f,-1.0f,-1.0f,
-		-1.0f,-1.0f,-1.0f,
-		-1.0f, 1.0f, 1.0f,
-		-1.0f, 1.0f,-1.0f,
-		 1.0f,-1.0f, 1.0f,
-		-1.0f,-1.0f, 1.0f,
-		-1.0f,-1.0f,-1.0f,
-		-1.0f, 1.0f, 1.0f,
-		-1.0f,-1.0f, 1.0f,
-		 1.0f,-1.0f, 1.0f,
-		 1.0f, 1.0f, 1.0f,
-		 1.0f,-1.0f,-1.0f,
-		 1.0f, 1.0f,-1.0f,
-		 1.0f,-1.0f,-1.0f,
-		 1.0f, 1.0f, 1.0f,
-		 1.0f,-1.0f, 1.0f,
-		 1.0f, 1.0f, 1.0f,
-		 1.0f, 1.0f,-1.0f,
-		-1.0f, 1.0f,-1.0f,
-		 1.0f, 1.0f, 1.0f,
-		-1.0f, 1.0f,-1.0f,
-		-1.0f, 1.0f, 1.0f,
-		 1.0f, 1.0f, 1.0f,
-		-1.0f, 1.0f, 1.0f,
-		 1.0f,-1.0f, 1.0f
+	// Create models
+	// Triangles
+	static const GLfloat g_vertex_triangles_buffer_data[] = {
+		 0.000f,  0.000f,  0.000f,
+		-1.000f, -1.000f, -1.000f,
+		 1.000f, -1.000f, -1.000f,
+		 1.000f,  1.000f, -1.000f,
+		-1.000f,  1.000f, -1.000f,
+		-1.000f, -1.000f, -1.000f,
 	};
-
-	/*
-	// Two UV coordinatesfor each vertex. They were created with Blender.
-	static const GLfloat g_uv_buffer_data[] = { 
-		0.000059f, 1.0f-0.000004f, 
-		0.000103f, 1.0f-0.336048f, 
-		0.335973f, 1.0f-0.335903f, 
-		1.000023f, 1.0f-0.000013f, 
-		0.667979f, 1.0f-0.335851f, 
-		0.999958f, 1.0f-0.336064f, 
-		0.667979f, 1.0f-0.335851f, 
-		0.336024f, 1.0f-0.671877f, 
-		0.667969f, 1.0f-0.671889f, 
-		1.000023f, 1.0f-0.000013f, 
-		0.668104f, 1.0f-0.000013f, 
-		0.667979f, 1.0f-0.335851f, 
-		0.000059f, 1.0f-0.000004f, 
-		0.335973f, 1.0f-0.335903f, 
-		0.336098f, 1.0f-0.000071f, 
-		0.667979f, 1.0f-0.335851f, 
-		0.335973f, 1.0f-0.335903f, 
-		0.336024f, 1.0f-0.671877f, 
-		1.000004f, 1.0f-0.671847f, 
-		0.999958f, 1.0f-0.336064f, 
-		0.667979f, 1.0f-0.335851f, 
-		0.668104f, 1.0f-0.000013f, 
-		0.335973f, 1.0f-0.335903f, 
-		0.667979f, 1.0f-0.335851f, 
-		0.335973f, 1.0f-0.335903f, 
-		0.668104f, 1.0f-0.000013f, 
-		0.336098f, 1.0f-0.000071f, 
-		0.000103f, 1.0f-0.336048f, 
-		0.000004f, 1.0f-0.671870f, 
-		0.336024f, 1.0f-0.671877f, 
-		0.000103f, 1.0f-0.336048f, 
-		0.336024f, 1.0f-0.671877f, 
-		0.335973f, 1.0f-0.335903f, 
-		0.667969f, 1.0f-0.671889f, 
-		1.000004f, 1.0f-0.671847f, 
-		0.667979f, 1.0f-0.335851f
+	static const GLfloat g_color_triangles_buffer_data[] = {
+		 0.583f,  0.771f,  0.014f,
+		 0.609f,  0.115f,  0.436f,
+		 0.327f,  0.483f,  0.844f,
+		 0.200f,  0.771f,  0.600f,
+		 0.300f,  0.115f,  0.700f,
+		 0.400f,  0.483f,  0.200f,
 	};
-	*/
+	// Fill vertex buffer
+	GLuint vertexTrianglesBuffer;
+	glGenBuffers(1, &vertexTrianglesBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, vertexTrianglesBuffer);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(g_vertex_triangles_buffer_data), g_vertex_triangles_buffer_data, GL_STATIC_DRAW);
+	// Fill color buffer
+	GLuint colorTrianglesBuffer;
+	glGenBuffers(1, &colorTrianglesBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, colorTrianglesBuffer);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(g_color_triangles_buffer_data), g_color_triangles_buffer_data, GL_STATIC_DRAW);
 
-	GLuint vertexbuffer;
-	glGenBuffers(1, &vertexbuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(g_vertex_buffer_data), g_vertex_buffer_data, GL_STATIC_DRAW);
+	// Pyramid
+	static const GLfloat g_vertex_pyramid_buffer_data[] = {
+		 0.0f,  0.0f,  0.0f, //
+		 2.0f,  2.0f,  0.0f,
+		 0.0f,  1.0f,  0.0f,
+		 0.0f,  0.0f,  0.0f, //
+		-2.0f,  2.0f,  0.0f,
+		 0.0f,  1.0f,  0.0f,
+		 0.0f,  0.0f,  0.0f, //
+		 2.0f,  2.0f,  0.0f,
+		 0.0f,  0.0f,  1.0f,
+		 2.0f,  2.0f,  0.0f, //
+		 0.0f,  1.0f,  0.0f,
+		 0.0f,  0.0f,  1.0f,
+		 0.0f,  1.0f,  0.0f, //
+		-2.0f,  2.0f,  0.0f,
+		 0.0f,  0.0f,  1.0f,
+		-2.0f,  2.0f,  0.0f, //
+		 0.0f,  0.0f,  0.0f,
+		 0.0f,  0.0f,  1.0f,
+	};
+	static const GLfloat g_color_pyramid_buffer_data[] = {
+		1.000f,  0.000f,  0.000f, //
+		0.000f,  1.000f,  0.000f,
+		0.700f,  0.000f,  0.700f,
+		1.000f,  0.000f,  0.000f, //
+		0.000f,  0.700f,  0.700f,
+		0.700f,  0.000f,  0.700f,
+		1.000f,  0.000f,  0.000f, //
+		0.000f,  1.000f,  0.000f,
+		0.100f,  0.100f,  0.100f,
+		0.000f,  1.000f,  0.000f, //
+		0.700f,  0.000f,  0.700f,
+		0.100f,  0.100f,  0.100f,
+		0.700f,  0.000f,  0.700f, //
+		0.609f,  0.115f,  0.436f,
+		0.000f,  0.000f,  0.000f,
+		0.000f,  0.700f,  0.700f, //
+		1.000f,  0.000f,  0.000f,
+		0.100f,  0.100f,  0.100f,
+	};
+	// Fill vertex buffer
+	GLuint vertexPyramidBuffer;
+	glGenBuffers(1, &vertexPyramidBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, vertexPyramidBuffer);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(g_vertex_pyramid_buffer_data), g_vertex_pyramid_buffer_data, GL_STATIC_DRAW);
+	// Fill color buffer
+	GLuint colorPyramidBuffer;
+	glGenBuffers(1, &colorPyramidBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, colorPyramidBuffer);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(g_color_pyramid_buffer_data), g_color_pyramid_buffer_data, GL_STATIC_DRAW);
 
-	/*
-	GLuint uvbuffer;
-	glGenBuffers(1, &uvbuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(g_uv_buffer_data), g_uv_buffer_data, GL_STATIC_DRAW);
-	*/
-
+	float time = 0;
+	long long last_ms = 0;
+	long long last_step = 0;
 	do{
+		// calculate fps
+		++last_step;
+		if (last_step % 10 == 0) {
+			printf("FPS: %f\n", 10 * (1000.0f / (current_ms() - last_ms)));
+			last_ms = current_ms();
+		}
 
-		// Clear the screen
+		// time for object movement
+		time += 0.01;
+		
+		// Recalculate MVP
+		// Angle of view: 45, ratio: 1:1, display distance: 0.1 <-> 100
+		glm::mat4 Projection = glm::perspective(glm::radians(45.0f), 1.0f / 1.0f, 0.1f, 100.0f);
+		// Camera: pos(x, y, z), look(0, 0, 0), head(0, 1, 0)
+		float posx = 6 * std::sin(time);
+		float posy = 4 * std::cos(time);
+		float posz = 4 * (std::sin(time) + std::cos(time));
+		glm::mat4 View = glm::lookAt(glm::vec3(posx, posy, posz), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+		// Model
+		float crysis_time = 1.2 - std::pow(std::sin(time), 16);
+		glm::mat4 modelScaleMatrix = glm::scale(glm::vec3(crysis_time));
+		glm::vec3 modelRotationAxis(0.0f, 0.0f, 1.0f);
+		glm::mat4 modelRotationMatrix = glm::rotate(crysis_time * 64, modelRotationAxis);
+		glm::mat4 modelTranslationMatrix = glm::translate(glm::vec3(0.0f, 0.0f, -1.0f));
+		glm::mat4 ModelNoRotation = modelTranslationMatrix * glm::mat4(1.0f) * modelScaleMatrix;
+		glm::mat4 ModelNoScale = modelTranslationMatrix * modelRotationMatrix * glm::mat4(1.0f);
+		// ModelViewProjection
+		glm::mat4 MVPNoObjScale = Projection * View * ModelNoScale;
+		glm::mat4 MVPNoObjRotation = Projection * View * ModelNoRotation;
+
+		// Clear screen
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		// Use our shader
-		glUseProgram(programID);
-
-		// Send our transformation to the currently bound shader, 
-		// in the "MVP" uniform
-		glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
-
-		// Bind our texture in Texture Unit 0
-		/*
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, Texture);
-		// Set our "myTextureSampler" sampler to use Texture Unit 0
-		glUniform1i(TextureID, 0);
-		*/
-
-		// 1rst attribute buffer : vertices
+		// Enable buffers with attributes
 		glEnableVertexAttribArray(0);
-		glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-		glVertexAttribPointer(
-			0,                  // attribute. No particular reason for 0, but must match the layout in the shader.
-			3,                  // size
-			GL_FLOAT,           // type
-			GL_FALSE,           // normalized?
-			0,                  // stride
-			(void*)0            // array buffer offset
-		);
-
-		/*
-		// 2nd attribute buffer : UVs
 		glEnableVertexAttribArray(1);
-		glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
-		glVertexAttribPointer(
-			1,                                // attribute. No particular reason for 1, but must match the layout in the shader.
-			2,                                // size : U+V => 2
-			GL_FLOAT,                         // type
-			GL_FALSE,                         // normalized?
-			0,                                // stride
-			(void*)0                          // array buffer offset
-		);
-		*/
 
-		// Draw the triangle !
-		glDrawArrays(GL_TRIANGLES, 0, 12*3); // 12*3 indices starting at 0 -> 12 triangles
+		// Draw pyramid
+		// Set [coordinates] buffer ID: 0, size: 3, normalised: false
+		glBindBuffer(GL_ARRAY_BUFFER, vertexPyramidBuffer);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+		// Set [colors] buffer ID: 1, size: 3, normalised: false
+		glBindBuffer(GL_ARRAY_BUFFER, colorPyramidBuffer);
+		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+		// Use shader for Pyramid
+		glUseProgram(programPyramidID);
+		glUniformMatrix4fv(MatrixPyramidID, 1, GL_FALSE, &MVPNoObjRotation[0][0]);
+		// Draw
+		glDrawArrays(GL_TRIANGLES, 0, 6 * 3);
 
+		// Start of drawing transparent things
+		glEnable(GL_BLEND);
+		glDepthMask(GL_FALSE);
+
+		// Draw triangles
+		// Set [coordinates] buffer ID: 0, size: 3, normalised: false
+		glBindBuffer(GL_ARRAY_BUFFER, vertexTrianglesBuffer);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+		// Set [colors] buffer ID: 1, size: 3, normalised: false
+		glBindBuffer(GL_ARRAY_BUFFER, colorTrianglesBuffer);
+		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+		// Use shader for Triangle1
+		glUseProgram(programTriangle1ID);
+		glUniformMatrix4fv(MatrixTriangle1ID, 1, GL_FALSE, &MVPNoObjScale[0][0]);
+		// Draw
+		glDrawArrays(GL_TRIANGLES, 0, 1 * 3);
+		// Use shader for Triangle2
+		glUseProgram(programTriangle2ID);
+		glUniformMatrix4fv(MatrixTriangle2ID, 1, GL_FALSE, &MVPNoObjScale[0][0]);
+		// Draw
+		glDrawArrays(GL_TRIANGLES, 1 * 3, 1 * 3);
+
+		// End of drawing transparent things
+		glDepthMask(GL_TRUE);
+		glDisable(GL_BLEND);
+
+		// Disable buffers with attributes
 		glDisableVertexAttribArray(0);
 		glDisableVertexAttribArray(1);
 
 		// Swap buffers
 		glfwSwapBuffers(window);
 		glfwPollEvents();
-
 	} // Check if the ESC key was pressed or the window was closed
 	while( glfwGetKey(window, GLFW_KEY_ESCAPE ) != GLFW_PRESS &&
 		   glfwWindowShouldClose(window) == 0 );
 
-	// Cleanup VBO and shader
-	glDeleteBuffers(1, &vertexbuffer);
-	/*glDeleteBuffers(1, &uvbuffer);*/
-	glDeleteProgram(programID);
-	/*glDeleteTextures(1, &Texture);*/
+	// Cleanup
+	glDeleteBuffers(1, &vertexTrianglesBuffer);
+	glDeleteBuffers(1, &colorTrianglesBuffer);
+	glDeleteProgram(programTriangle1ID);
+	glDeleteProgram(programTriangle2ID);
 	glDeleteVertexArrays(1, &VertexArrayID);
 
 	// Close OpenGL window and terminate GLFW

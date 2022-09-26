@@ -65,8 +65,12 @@ add_executable(homework01
 	common/texture.cpp
 	common/texture.hpp
 	
-	homework01/TransformVertexShader.vertexshader
-	homework01/TextureFragmentShader.fragmentshader
+	homework01/Triangle1.vertexshader
+	homework01/Triangle1.fragmentshader
+	homework01/Triangle2.vertexshader
+	homework01/Triangle2.fragmentshader
+	homework01/Pyramid.vertexshader
+	homework01/Pyramid.fragmentshader
 )
 target_link_libraries(homework01
 	${ALL_LIBS}
