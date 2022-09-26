@@ -16,6 +16,6 @@ void main(){
 
 	// The color of each vertex will be interpolated
 	// to produce the color of each fragment
-	fragmentColor = vec4(vertexColor[0], vertexColor[1], vertexColor[2], 0.5);
+	fragmentColor = vec4(vertexColor[0], vertexColor[1], vertexColor[2], 0.8);
 }
 
