@@ -1,0 +1,17 @@
+#version 330 core
+
+// Interpolated values from the vertex shaders
+in vec2 UV;
+
+// Ouput data
+out vec4 color;
+
+// Values that stay constant for the whole mesh.
+uniform sampler2D textureSamplerFireball;
+
+void main(){
+
+	// Output color = color of the texture at the specified UV
+	vec3 col3 = texture( textureSamplerFireball, UV ).rgb;
+	color = vec4(col3[0], col3[1], col3[2], 0.5);
+}

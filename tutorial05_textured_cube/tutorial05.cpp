@@ -84,8 +84,8 @@ int main( void )
 	glm::mat4 MVP        = Projection * View * Model; // Remember, matrix multiplication is the other way around
 
 	// Load the texture using any two methods
-	//GLuint Texture = loadBMP_custom("uvtemplate.bmp");
-	GLuint Texture = loadDDS("/home/gordei/VSprojects/OpenGL/opengl/ogl-master/tutorial05_textured_cube/uvtemplate.DDS");
+	GLuint Texture = loadBMP_custom("/home/gordei/VSprojects/OpenGL/opengl/ogl-master/tutorial05_textured_cube/uvtemplate.bmp");
+	//GLuint Texture = loadDDS("/home/gordei/VSprojects/OpenGL/opengl/ogl-master/tutorial05_textured_cube/uvtemplate.DDS");
 	
 	// Get a handle for our "myTextureSampler" uniform
 	GLuint TextureID  = glGetUniformLocation(programID, "myTextureSampler");
