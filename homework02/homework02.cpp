@@ -1,4 +1,6 @@
+// all buttons to const
 // sort transparent?
+// key pressed / key was pressed to myScene
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,6 +11,7 @@
 #include <list>
 #include <fstream>
 #include <algorithm>
+#include <iostream>
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -25,6 +28,10 @@ using namespace glm;
 const float PI = glm::pi<float>();
 const GLfloat EPSYLON = 0.001f;
 
+const std::string TYPE_SKY = "sky";
+const std::string TYPE_FIREBALL_HIT = "fireball_hit";
+const std::string TYPE_FIREBALL = "fireball";
+const std::string TYPE_PYRAMID_ENEMY = "pyramid_enemy";
 const long long ENEMY_SPAWN_DELTA = 1500;
 const long long ENEMY_SPAWN_RADIUS = 3;
 const long long FIREBALL_COOLDOWN = 500;
@@ -55,6 +62,74 @@ long long current_ms() {
 	using namespace std::chrono;
 	return static_cast<long long>(duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count());
 }
+
+std::vector<GLfloat> vector_from_file(std::string filepath) {
+	std::vector<GLfloat> ans;
+	std::ifstream ifs;
+	ifs.open(filepath);
+	GLfloat number;
+	while (ifs >> number) {
+		ans.push_back(number);
+	}
+	ifs.close();
+	return ans;
+}
+
+GLfloat random(float a, float b) {
+	return ((float)std::rand()) / ((float)RAND_MAX) * (b - a) + a;
+}
+
+
+template <typename T>
+std::ofstream& operator<<(std::ofstream& ofs, const std::vector<T>& vec) {
+	ofs << vec.size() << std::endl;
+	for (const auto& x : vec) {
+		ofs << x << std::endl;
+	}
+	return ofs;
+}
+
+template <typename T>
+std::ifstream& operator>>(std::ifstream& ifs, std::vector<T>& vec) {
+	size_t size = 0;
+	ifs >> size;
+	vec.clear();
+	vec.resize(size);
+	for (auto& x : vec) {
+		ifs >> x;
+	}
+	return ifs;
+}
+
+std::ofstream& operator<<(std::ofstream& ofs, const vec3& vec) {
+	ofs << vec[0] << " " << vec[1] << " " << vec[2] << std::endl;
+	return ofs;
+}
+
+std::ifstream& operator>>(std::ifstream& ifs, vec3& vec) {
+	ifs >> vec[0] >> vec[1] >> vec[2];
+	return ifs;
+}
+
+std::ofstream& operator<<(std::ofstream& ofs, const mat4& vec) {
+	for (int i = 0; i < 4; ++i) {
+		for (int j = 0; j < 4; ++j) {
+			ofs << vec[i][j] << " ";
+		}
+	}
+	ofs << std::endl;
+	return ofs;
+}
+
+std::ifstream& operator>>(std::ifstream& ifs, mat4& vec) {
+	for (int i = 0; i < 4; ++i) {
+		for (int j = 0; j < 4; ++j) {
+			ifs >> vec[i][j];
+		}
+	}
+	return ifs;
+}
+
 
 struct MyObjectRaw {
 	std::vector<GLfloat> verts;
@@ -110,6 +185,7 @@ private:
 		GLfloat rotation_angle = 0.0f;
 		glm::vec3 translation{0.0f, 0.0f, 0.0f};
 		glm::vec3 speed{0.0f, 0.0f, 0.0f};
+		std::string label;
 
 		glm::mat4 calculate_model() {
 			glm::mat4 modelScaleMatrix = glm::scale(scale);
@@ -120,6 +196,42 @@ private:
 
 		GLfloat get_collider_radius() const {
 			return collider_radius * glm::length(scale) / sqrtf(3.0);
+		}
+
+		friend std::ofstream& operator<<(std::ofstream& ofs, const MyObject& obj) {
+			ofs << obj.collider_radius << std::endl;
+			ofs << obj.program << std::endl;
+			ofs << obj.texture << std::endl;
+			ofs << obj.matrix << std::endl;
+			ofs << obj.vertex << std::endl;
+			ofs << obj.color << std::endl;
+			ofs << "[" << obj.sampler << std::endl;
+			ofs << obj.triangles_amount << std::endl;
+			ofs << obj.is_transparent << std::endl;
+			ofs << obj.is_texture_instead_of_color << std::endl;
+			ofs << obj.is_deleted << std::endl;
+			ofs << obj.rotation_angle << std::endl;
+			ofs << "[" << obj.label << std::endl;
+			ofs << obj.scale << obj.rotation_axis << obj.translation << obj.speed;
+			return ofs;
+		}
+
+		friend std::ifstream& operator>>(std::ifstream& ifs, MyObject& obj) {
+			ifs >> obj.collider_radius;
+			ifs >> obj.program;
+			ifs >> obj.texture;
+			ifs >> obj.matrix;
+			ifs >> obj.vertex;
+			ifs >> obj.color;
+			ifs >> obj.sampler; obj.sampler = obj.sampler.substr(1);
+			ifs >> obj.triangles_amount;
+			ifs >> obj.is_transparent;
+			ifs >> obj.is_texture_instead_of_color;
+			ifs >> obj.is_deleted;
+			ifs >> obj.rotation_angle;
+			ifs >> obj.label; obj.label = obj.label.substr(1);
+			ifs >> obj.scale >> obj.rotation_axis >> obj.translation >> obj.speed;
+			return ifs;
 		}
 
 		friend class MyScene;
@@ -242,6 +354,10 @@ public:
 		glfwTerminate();
 	}
 
+	size_t amount_of_objects() const {
+		return objects.size();
+	}
+
 	MyObject& operator[](size_t k) {
 		return objects[k];
 	}
@@ -285,7 +401,7 @@ public:
 		return textures.size() - 1;
 	}
 
-	[[nodiscard]] size_t add_object(MyObjectRaw obj) {
+	size_t add_object(MyObjectRaw obj, std::string label) {
 		GLuint matrixID = glGetUniformLocation(shaders[obj.program_id], "MVP");
 
 		GLuint vertexBufferID;
@@ -307,6 +423,7 @@ public:
 		new_object.collider_radius = obj.collider_radius;
 		new_object.is_texture_instead_of_color = obj.is_texture_instead_of_color;
 		new_object.triangles_amount = obj.verts.size() / 3;
+		new_object.label = label;
 		objects.push_back(new_object);
 		return objects.size() - 1;
 	}
@@ -350,23 +467,39 @@ public:
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
+
+	void save(const std::string& filename) {
+		std::ofstream file_to_save(filename, std::ofstream::out);
+		file_to_save << "[" << cwd << std::endl;
+		file_to_save << VertexArrayID << std::endl;
+		file_to_save << projection_angle << std::endl;
+		file_to_save << projection_ratio << std::endl;
+		file_to_save << projection_dist_min << std::endl;
+		file_to_save << projection_dist_max << std::endl;
+		file_to_save << shaders << textures;
+		file_to_save << objects;
+		file_to_save << camera_pos << camera_look << camera_head << projection << view;
+		file_to_save.close();
+		printf("SAVE IS SUCCESFULL\n");
+	}
+
+	void load(const std::string& filename) {
+		std::ifstream file_to_load(filename, std::ifstream::in);
+		file_to_load >> cwd; cwd = cwd.substr(1);
+		file_to_load >> VertexArrayID;
+		file_to_load >> projection_angle;
+		file_to_load >> projection_ratio;
+		file_to_load >> projection_dist_min;
+		file_to_load >> projection_dist_max;
+		file_to_load >> shaders >> textures;
+		file_to_load >> objects;
+		file_to_load >> camera_pos >> camera_look >> camera_head >> projection >> view;
+		file_to_load.close();
+		printf("LOAD IS SUCCESFULL\n");
+		save(filename + "loaded");
+	}
 };
 
-std::vector<GLfloat> vector_from_file(std::string filepath) {
-	std::vector<GLfloat> ans;
-	std::ifstream ifs;
-	ifs.open(filepath);
-	GLfloat number;
-	while (ifs >> number) {
-		ans.push_back(number);
-	}
-	ifs.close();
-	return ans;
-}
-
-GLfloat random(float a, float b) {
-	return ((float)std::rand()) / ((float)RAND_MAX) * (b - a) + a;
-}
 
 std::vector<GLfloat> get_vert_sphere(GLfloat radius, int triangles_in_height, int triangles_in_width) {
 	GLfloat angle_height = PI / triangles_in_height;
@@ -464,6 +597,7 @@ std::vector<GLfloat> get_uv_sphere(const std::vector<GLfloat>& vert) {
 	return result;
 }
 
+
 int main(int argc, char* argv[])
 {
 	// remember current working directory
@@ -484,7 +618,7 @@ int main(int argc, char* argv[])
 	// Camera: pos(0, 0, 0), look(0, 1, 0), head(0, 1, 0)
 	myScene.camera_pos = glm::vec3(0, 0, 0);
 	myScene.camera_look = glm::vec3(1, 0, 0);
-	myScene.camera_head = glm::vec3(0, 1, 0);
+	myScene.camera_head = glm::vec3(0, 0, -1);
 
 
 	// load shaders
@@ -520,10 +654,9 @@ int main(int argc, char* argv[])
 	MyObjectRaw pyramid_enemy_raw(pyramid_enemy_vert, false, sqrtf(3) / 2);
 	pyramid_enemy_raw.set_colors(pyramid_enemy_col, shader_pyramid_enemy);
 
-	std::list<size_t> pyramid_enemies;
-	std::list<size_t> sphere_fireballs;
-	size_t sky = myScene.add_object(sky_raw);
-	size_t fireball_hit = myScene.add_object(fireball_hit_raw);
+
+	myScene.add_object(sky_raw, TYPE_SKY);
+	myScene.add_object(fireball_hit_raw, TYPE_FIREBALL_HIT);
 	const int MAX_EFFECT_FIREBALL_HIT = 30;
 	int effect_fireball_hit = -1;
 
@@ -532,6 +665,8 @@ int main(int argc, char* argv[])
 	long long enemy_last_spawn_time = 0;
 	long long fireball_last_spawn_time = 0;
 	long long last_frame_time = 0;
+	bool save_button_was_pressed = false;
+	bool load_button_was_pressed = false;
 	do {
 		float delta_time = current_ms() - last_frame_time;
 		last_frame_time = current_ms();
@@ -552,6 +687,24 @@ int main(int argc, char* argv[])
 		mouse_y_delta -= SCREEN_HEIGHT / 2;
 		mouse_x_delta *= MOUSE_SPEED;
 		mouse_y_delta *= MOUSE_SPEED;
+
+
+		// get all objects from scene
+		std::list<size_t> pyramid_enemies;
+		std::list<size_t> sphere_fireballs;
+		size_t sky = 0;
+		size_t fireball_hit = 0;
+		for (size_t obj = 0; obj < myScene.amount_of_objects(); ++obj) {
+			if (myScene[obj].label == TYPE_SKY) {
+				sky = obj;
+			} else if (myScene[obj].label == TYPE_FIREBALL_HIT) {
+				fireball_hit = obj;
+			} else if (myScene[obj].label == TYPE_PYRAMID_ENEMY) {
+				if (!myScene[obj].is_deleted) pyramid_enemies.push_back(obj);
+			} else if (myScene[obj].label == TYPE_FIREBALL) {
+				if (!myScene[obj].is_deleted) sphere_fireballs.push_back(obj);
+			}
+		}
 
 
 		// delete objects
@@ -579,18 +732,18 @@ int main(int argc, char* argv[])
 
 		// create objects
 		if (current_ms() - enemy_last_spawn_time >= ENEMY_SPAWN_DELTA) {
-			size_t pyramid = myScene.add_object(pyramid_enemy_raw);
+			size_t pyramid = myScene.add_object(pyramid_enemy_raw, TYPE_PYRAMID_ENEMY);
 			myScene[pyramid].translation = glm::vec3(random(-1, 1) * ENEMY_SPAWN_RADIUS,
 												     random(-1, 1) * ENEMY_SPAWN_RADIUS,
 													 random(-1, 1) * ENEMY_SPAWN_RADIUS);
 			myScene[pyramid].rotation_angle = random(-1, 1) * PI;
-			myScene[pyramid].speed = glm::vec3(random(-1, 1), 0, random(-1, 1)) * PYRAMID_ENEMY_SPEED;
+			myScene[pyramid].speed = glm::vec3(random(-1, 1), random(-1, 1), 0) * PYRAMID_ENEMY_SPEED;
 			pyramid_enemies.push_back(pyramid);
 			enemy_last_spawn_time = current_ms();
 		}
 		if (glfwGetKey(window, GLFW_KEY_SPACE ) == GLFW_PRESS) {
 			if (current_ms() - fireball_last_spawn_time >= FIREBALL_COOLDOWN) {
-			  	size_t fireball = myScene.add_object(fireball_raw);
+			  	size_t fireball = myScene.add_object(fireball_raw, TYPE_FIREBALL);
 			  	myScene[fireball].translation = myScene.camera_pos + myScene.get_forward() * (float)myScene[fireball].get_collider_radius() * 2.0f;
 			  	myScene[fireball].translation += (-myScene.camera_head + myScene.get_right()) * 0.5f;
 				myScene[fireball].rotation_axis = myScene.get_forward();
@@ -655,7 +808,18 @@ int main(int argc, char* argv[])
 
 
 		myScene.update();
-	} while(glfwGetKey(window, GLFW_KEY_ESCAPE ) != GLFW_PRESS && glfwWindowShouldClose(window) == 0);
+
+
+		bool new_load_button_was_pressed = (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS);
+		bool new_save_button_was_pressed = (glfwGetKey(window, GLFW_KEY_O) == GLFW_PRESS);
+		// load scene
+		if (load_button_was_pressed && !new_load_button_was_pressed) myScene.load("/home/gordei/tmp/file");
+		// save scene
+		if (save_button_was_pressed && !new_save_button_was_pressed) myScene.save("/home/gordei/tmp/file");
+		// update buttons states
+		load_button_was_pressed = new_load_button_was_pressed;
+		save_button_was_pressed = new_save_button_was_pressed;
+	} while(glfwGetKey(window, GLFW_KEY_ESCAPE) != GLFW_PRESS && glfwWindowShouldClose(window) == 0);
 
 	return 0;
 }
