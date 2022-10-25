@@ -302,6 +302,8 @@ private:
 		// Use shader
 		glUseProgram(obj.program);
 		glUniformMatrix4fv(obj.matrix, 1, GL_FALSE, &MVP[0][0]);
+		vec3 light{1.0f, 0.0f, 1.0f};
+		glUniform3fv(glGetUniformLocation(obj.program, "light"), 1, &light[0]);
 		// Draw
 		glDrawArrays(GL_TRIANGLES, 0, obj.triangles_amount);
 	}
