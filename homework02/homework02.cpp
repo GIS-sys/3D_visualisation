@@ -1,6 +1,16 @@
-// all buttons to const
-// sort transparent?
+// HIGH
+// add lighting (https://www.youtube.com/watch?v=ZbszezwNSZU)
+
+// MEDIUM
+// load save in the next session? add_object - bind_buffer possibly
+// clear memory when loading
+
+// LOW
+// delete objects if they are -s_deleted once in a while; add is_shown to disable without deleting
 // key pressed / key was pressed to myScene
+// clear all memory in the end (destructor)
+// sort transparent?
+
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,9 +42,9 @@ const std::string TYPE_SKY = "sky";
 const std::string TYPE_FIREBALL_HIT = "fireball_hit";
 const std::string TYPE_FIREBALL = "fireball";
 const std::string TYPE_PYRAMID_ENEMY = "pyramid_enemy";
-const long long ENEMY_SPAWN_DELTA = 1500;
-const long long ENEMY_SPAWN_RADIUS = 3;
-const long long FIREBALL_COOLDOWN = 500;
+const long long ENEMY_SPAWN_DELTA = 2500;
+const long long ENEMY_SPAWN_RADIUS = 10;
+const long long FIREBALL_COOLDOWN = 300;
 const long long SCREEN_WIDTH = 1024;
 const long long SCREEN_HEIGHT = 1024;
 const GLfloat PYRAMID_ENEMY_SPEED = 0.001f;
@@ -44,6 +54,20 @@ const GLfloat HUMAN_SPEED = 0.005f;
 const GLfloat HUMAN_SPRINT_SPEED = 0.05f;
 const GLfloat MOUSE_SPEED = 0.002f;
 const GLfloat PITCH_SPEED = 0.003f;
+
+const int KEY_EXIT = GLFW_KEY_ESCAPE;
+const int KEY_FORWARD = GLFW_KEY_W;
+const int KEY_LEFT = GLFW_KEY_A;
+const int KEY_RIGHT = GLFW_KEY_D;
+const int KEY_BACK = GLFW_KEY_S;
+const int KEY_PITCH_LEFT = GLFW_KEY_Q;
+const int KEY_PITCH_RIGHT = GLFW_KEY_E;
+const int KEY_RISE = GLFW_KEY_SPACE;
+const int KEY_LOWER = GLFW_KEY_LEFT_CONTROL;
+const int KEY_SPRINT = GLFW_KEY_LEFT_SHIFT;
+const int KEY_FIREBALL = GLFW_KEY_L;
+const int KEY_SAVE = GLFW_KEY_O;
+const int KEY_LOAD = GLFW_KEY_P;
 
 
 vec3 calc_right(vec3 forward, vec3 head) {
@@ -624,6 +648,8 @@ int main(int argc, char* argv[])
 	// load shaders
 	size_t shader_fireball = myScene.load_shader("shaders/Fireball");
 	size_t shader_pyramid_enemy = myScene.load_shader("shaders/PyramidEnemy");
+	size_t shader_fireball_hit = myScene.load_shader("shaders/FireballHit");
+	size_t shader_sky = myScene.load_shader("shaders/Sky");
 
 	// load textures
 	size_t texture_uv_fireball = myScene.load_texture("textures/fireball.bmp");
@@ -632,13 +658,13 @@ int main(int argc, char* argv[])
 
 	// sky
 	std::vector<GLfloat> sky_vert = get_vert_sphere(99.0f, 32, 64);
-	std::vector<GLfloat> sky_uv = get_uv_sphere(sky_vert);;
+	std::vector<GLfloat> sky_uv = get_uv_sphere(sky_vert);
 	MyObjectRaw sky_raw(sky_vert, false, 99.0f);
-	sky_raw.set_texture(texture_uv_sky, "textureSamplerFireball", sky_uv, shader_fireball);
+	sky_raw.set_texture(texture_uv_sky, "textureSamplerSky", sky_uv, shader_sky);
 
 	// fireball
 	std::vector<GLfloat> fireball_vert = get_vert_sphere(0.5, 16, 32);
-	std::vector<GLfloat> fireball_uv = get_uv_sphere(fireball_vert);;
+	std::vector<GLfloat> fireball_uv = get_uv_sphere(fireball_vert);
 	MyObjectRaw fireball_raw(fireball_vert, false, 0.5);
 	fireball_raw.set_texture(texture_uv_fireball, "textureSamplerFireball", fireball_uv, shader_fireball);
 
@@ -646,7 +672,7 @@ int main(int argc, char* argv[])
 	std::vector<GLfloat> fireball_hit_vert = get_vert_sphere(0.5, 4, 8);
 	std::vector<GLfloat> fireball_hit_col = get_color_simple(fireball_hit_vert, {0, 1, 0});
 	MyObjectRaw fireball_hit_raw(fireball_hit_vert, true, 0.5);
-	fireball_hit_raw.set_colors(fireball_hit_col, shader_pyramid_enemy);
+	fireball_hit_raw.set_colors(fireball_hit_col, shader_fireball_hit);
 
 	// enemy
 	std::vector<GLfloat> pyramid_enemy_vert = vector_from_file(cwd + "models/pyramid.vert");
@@ -741,7 +767,7 @@ int main(int argc, char* argv[])
 			pyramid_enemies.push_back(pyramid);
 			enemy_last_spawn_time = current_ms();
 		}
-		if (glfwGetKey(window, GLFW_KEY_SPACE ) == GLFW_PRESS) {
+		if (glfwGetKey(window, KEY_FIREBALL) == GLFW_PRESS) {
 			if (current_ms() - fireball_last_spawn_time >= FIREBALL_COOLDOWN) {
 			  	size_t fireball = myScene.add_object(fireball_raw, TYPE_FIREBALL);
 			  	myScene[fireball].translation = myScene.camera_pos + myScene.get_forward() * (float)myScene[fireball].get_collider_radius() * 2.0f;
@@ -756,27 +782,36 @@ int main(int argc, char* argv[])
 
 		// change camera pos
 		vec3 delta_cam_pos;
-		GLfloat current_speed = ((glfwGetKey(window, GLFW_KEY_LEFT_SHIFT ) == GLFW_PRESS) ? HUMAN_SPRINT_SPEED : HUMAN_SPEED);
-		if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-			delta_cam_pos = myScene.get_forward() * current_speed * delta_time;
+		GLfloat current_speed = ((glfwGetKey(window, KEY_SPRINT ) == GLFW_PRESS) ? HUMAN_SPRINT_SPEED : HUMAN_SPEED);
+		if (glfwGetKey(window, KEY_FORWARD) == GLFW_PRESS) {
+			delta_cam_pos += myScene.get_forward();
 		}
-		if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-			delta_cam_pos = -myScene.get_forward() * current_speed * delta_time;
+		if (glfwGetKey(window, KEY_BACK) == GLFW_PRESS) {
+			delta_cam_pos += -myScene.get_forward();
 		}
-		if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-			delta_cam_pos = -myScene.get_right() * current_speed * delta_time;
+		if (glfwGetKey(window, KEY_LEFT) == GLFW_PRESS) {
+			delta_cam_pos += -myScene.get_right();
 		}
-		if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-			delta_cam_pos = myScene.get_right() * current_speed * delta_time;
+		if (glfwGetKey(window, KEY_RIGHT) == GLFW_PRESS) {
+			delta_cam_pos += myScene.get_right();
 		}
-		myScene.camera_pos += delta_cam_pos;
-		myScene.camera_look += delta_cam_pos;
+		if (glfwGetKey(window, KEY_RISE) == GLFW_PRESS) {
+			delta_cam_pos += myScene.camera_head;
+		}
+		if (glfwGetKey(window, KEY_LOWER) == GLFW_PRESS) {
+			delta_cam_pos += -myScene.camera_head;
+		}
+		if (glm::length(delta_cam_pos) > 0) {
+			delta_cam_pos = normalize(delta_cam_pos) * current_speed * delta_time;
+			myScene.camera_pos += delta_cam_pos;
+			myScene.camera_look += delta_cam_pos;
+		}
 		// change camera turning
 		GLfloat pitch_delta = 0.0f;
-		if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
+		if (glfwGetKey(window, KEY_PITCH_LEFT) == GLFW_PRESS) {
 			pitch_delta += PITCH_SPEED * delta_time;
 		}
-		if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
+		if (glfwGetKey(window, KEY_PITCH_RIGHT) == GLFW_PRESS) {
 			pitch_delta -= PITCH_SPEED * delta_time;
 		}
 		myScene.rotate_camera(mouse_x_delta, mouse_y_delta, pitch_delta);
@@ -810,8 +845,8 @@ int main(int argc, char* argv[])
 		myScene.update();
 
 
-		bool new_load_button_was_pressed = (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS);
-		bool new_save_button_was_pressed = (glfwGetKey(window, GLFW_KEY_O) == GLFW_PRESS);
+		bool new_load_button_was_pressed = (glfwGetKey(window, KEY_LOAD) == GLFW_PRESS);
+		bool new_save_button_was_pressed = (glfwGetKey(window, KEY_SAVE) == GLFW_PRESS);
 		// load scene
 		if (load_button_was_pressed && !new_load_button_was_pressed) myScene.load("/home/gordei/tmp/file");
 		// save scene
@@ -819,7 +854,7 @@ int main(int argc, char* argv[])
 		// update buttons states
 		load_button_was_pressed = new_load_button_was_pressed;
 		save_button_was_pressed = new_save_button_was_pressed;
-	} while(glfwGetKey(window, GLFW_KEY_ESCAPE) != GLFW_PRESS && glfwWindowShouldClose(window) == 0);
+	} while(glfwGetKey(window, KEY_EXIT) != GLFW_PRESS && glfwWindowShouldClose(window) == 0);
 
 	return 0;
 }

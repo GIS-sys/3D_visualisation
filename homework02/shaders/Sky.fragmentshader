@@ -7,9 +7,9 @@ in vec2 UV;
 out vec3 color;
 
 // Values that stay constant for the whole mesh.
-uniform sampler2D textureSamplerFireball;
+uniform sampler2D textureSamplerSky;
 
 void main() {
-	vec3 col3 = texture(textureSamplerFireball, UV).rgb;
+	vec3 col3 = texture(textureSamplerSky, UV).rgb;
 	color = vec3(col3[0], col3[1], col3[2]);
 }
