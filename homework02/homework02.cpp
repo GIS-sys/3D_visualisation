@@ -1,14 +1,14 @@
 // HIGH
-// add lighting (https://www.youtube.com/watch?v=ZbszezwNSZU)
+// add lighting
 
 // MEDIUM
 // load save in the next session? add_object - bind_buffer possibly
 // clear memory when loading
 
 // LOW
-// delete objects if they are -s_deleted once in a while; add is_shown to disable without deleting
+// delete objects if they are is_deleted once in a while; add is_shown to disable without deleting
 // key pressed / key was pressed to myScene
-// clear all memory in the end (destructor)
+// clear all memory in the end (destructor) (IS OK?)
 // sort transparent?
 
 
@@ -29,7 +29,7 @@ GLFWwindow* window;
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/transform.hpp>
-using namespace glm;
+//using namespace glm;
 
 #include <common/shader.hpp>
 #include <common/texture.hpp>
@@ -42,12 +42,15 @@ const std::string TYPE_SKY = "sky";
 const std::string TYPE_FIREBALL_HIT = "fireball_hit";
 const std::string TYPE_FIREBALL = "fireball";
 const std::string TYPE_PYRAMID_ENEMY = "pyramid_enemy";
+
+const glm::vec3 FIREBALL_LIGHT_COLOR = {1.0, 0.0, 0.0};
+const float FIREBALL_LIGHT_INTENSITY = 1.0;
 const long long ENEMY_SPAWN_DELTA = 500;
 const long long ENEMY_SPAWN_RADIUS = 10;
 const long long FIREBALL_COOLDOWN = 300;
 const long long SCREEN_WIDTH = 1024;
 const long long SCREEN_HEIGHT = 1024;
-const GLfloat PYRAMID_ENEMY_SPEED = 0.00001f;
+const GLfloat PYRAMID_ENEMY_SPEED = 0.01f;
 const GLfloat PYRAMID_ENEMY_ROTATION_RATE = 0.001f;
 const GLfloat FIREBALL_SPEED = 0.05f;
 const GLfloat FIREBALL_ROTATION_RATE = 0.005f;
@@ -55,6 +58,7 @@ const GLfloat HUMAN_SPEED = 0.005f;
 const GLfloat HUMAN_SPRINT_SPEED = 0.05f;
 const GLfloat MOUSE_SPEED = 0.002f;
 const GLfloat PITCH_SPEED = 0.003f;
+const std::string FILENAME_SAVE = "/home/gordei/tmp/file";
 
 const int KEY_EXIT = GLFW_KEY_ESCAPE;
 const int KEY_FORWARD = GLFW_KEY_W;
@@ -70,16 +74,18 @@ const int KEY_FIREBALL = GLFW_KEY_L;
 const int KEY_SAVE = GLFW_KEY_O;
 const int KEY_LOAD = GLFW_KEY_P;
 
+const int MAX_LIGHTS = 256;
 
-vec3 calc_right(vec3 forward, vec3 head) {
+
+glm::vec3 calc_right(glm::vec3 forward, glm::vec3 head) {
 	return cross(forward, head);
 }
 
-vec3 calc_forward(vec3 head, vec3 right) {
+glm::vec3 calc_forward(glm::vec3 head, glm::vec3 right) {
 	return cross(head, right);
 }
 
-vec3 calc_head(vec3 right, vec3 forward) {
+glm::vec3 calc_head(glm::vec3 right, glm::vec3 forward) {
 	return cross(right, forward);
 }
 
@@ -126,17 +132,17 @@ std::ifstream& operator>>(std::ifstream& ifs, std::vector<T>& vec) {
 	return ifs;
 }
 
-std::ofstream& operator<<(std::ofstream& ofs, const vec3& vec) {
+std::ofstream& operator<<(std::ofstream& ofs, const glm::vec3& vec) {
 	ofs << vec[0] << " " << vec[1] << " " << vec[2] << std::endl;
 	return ofs;
 }
 
-std::ifstream& operator>>(std::ifstream& ifs, vec3& vec) {
+std::ifstream& operator>>(std::ifstream& ifs, glm::vec3& vec) {
 	ifs >> vec[0] >> vec[1] >> vec[2];
 	return ifs;
 }
 
-std::ofstream& operator<<(std::ofstream& ofs, const mat4& vec) {
+std::ofstream& operator<<(std::ofstream& ofs, const glm::mat4& vec) {
 	for (int i = 0; i < 4; ++i) {
 		for (int j = 0; j < 4; ++j) {
 			ofs << vec[i][j] << " ";
@@ -146,7 +152,7 @@ std::ofstream& operator<<(std::ofstream& ofs, const mat4& vec) {
 	return ofs;
 }
 
-std::ifstream& operator>>(std::ifstream& ifs, mat4& vec) {
+std::ifstream& operator>>(std::ifstream& ifs, glm::mat4& vec) {
 	for (int i = 0; i < 4; ++i) {
 		for (int j = 0; j < 4; ++j) {
 			ifs >> vec[i][j];
@@ -171,6 +177,26 @@ struct MyObjectRaw {
 
 	MyObjectRaw(std::vector<GLfloat> verts_buf, bool is_transparent, GLfloat collider_radius = 0) :
 			   		verts(verts_buf), is_transparent(is_transparent), collider_radius(collider_radius) {
+		normals.clear();
+		for (size_t i = 0; i < verts.size() / 9; ++i) {
+			GLfloat x1 = verts[9 * i + 0];
+			GLfloat y1 = verts[9 * i + 1];
+			GLfloat z1 = verts[9 * i + 2];
+			GLfloat x2 = verts[9 * i + 3];
+			GLfloat y2 = verts[9 * i + 4];
+			GLfloat z2 = verts[9 * i + 5];
+			GLfloat x3 = verts[9 * i + 6];
+			GLfloat y3 = verts[9 * i + 7];
+			GLfloat z3 = verts[9 * i + 8];
+			glm::vec3 v1{x1 - x2, y1 - y2, z1 - z2};
+			glm::vec3 v2{x3 - x2, y3 - y2, z3 - z2};
+			glm::vec3 norm = cross(v1, v2);
+			for (int j = 0; j < 3; ++j) {
+				normals.push_back(norm[0]);
+				normals.push_back(norm[1]);
+				normals.push_back(norm[2]);
+			}
+		}
 	}
 
 	void set_colors(std::vector<GLfloat> colors_buf, size_t new_program_id) {
@@ -231,7 +257,7 @@ private:
 		}
 
 		GLfloat get_collider_radius() const {
-			return collider_radius * glm::length(scale) / sqrtf(3.0);
+			return collider_radius * length(scale) / sqrtf(3.0);
 		}
 
 		friend std::ofstream& operator<<(std::ofstream& ofs, const MyObject& obj) {
@@ -277,8 +303,6 @@ private:
 
 	std::string cwd;
 	GLuint VertexArrayID;
-	GLuint ColorArrayID;
-	GLuint NormalArrayID;
 	std::vector<MyObject> objects;
 	std::vector<GLuint> shaders;
 	std::vector<GLuint> textures;
@@ -294,6 +318,7 @@ private:
 		view = glm::lookAt(camera_pos, camera_look, camera_head);
 	}
 
+	////
 	void update_single_object(MyObject& obj) {
 		glm::mat4 model_rotation = obj.calculate_rotation_matrix();
 		glm::mat4 model = obj.calculate_model_matrix();
@@ -324,8 +349,8 @@ private:
 		glUseProgram(obj.program);
 		glUniformMatrix4fv(obj.matrix, 1, GL_FALSE, &MVP[0][0]);
 		// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-		std::vector<vec3> light_colors{{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
-		std::vector<vec3> light_positions{{0.0f, 0.0f, 10.0f}, {10.0f, 0.0f, 0.0f}};
+		std::vector<glm::vec3> light_colors{{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
+		std::vector<glm::vec3> light_positions{{0.0f, 0.0f, 10.0f}, {10.0f, 0.0f, 0.0f}};
 		int lights_amount = light_colors.size();
 		glUniformMatrix4fv(glGetUniformLocation(obj.program, "model_matrix"), 1, GL_FALSE, &model[0][0]);
 		glUniformMatrix4fv(glGetUniformLocation(obj.program, "model_rotation_matrix"), 1, GL_FALSE, &model_rotation[0][0]);
@@ -396,10 +421,6 @@ public:
 		// create memory for vertices
 		glGenVertexArrays(1, &VertexArrayID);
 		glBindVertexArray(VertexArrayID);
-		glGenVertexArrays(1, &ColorArrayID);
-		glBindVertexArray(ColorArrayID);
-		glGenVertexArrays(1, &NormalArrayID);
-		glBindVertexArray(NormalArrayID);
 	}
 
 	~MyScene() {
@@ -407,6 +428,7 @@ public:
 		for (auto& obj : objects) {
 			glDeleteBuffers(1, &obj.vertex);
 			glDeleteBuffers(1, &obj.color);
+			glDeleteBuffers(1, &obj.normal);
 			glDeleteProgram(obj.program);
 		}
 		glDeleteVertexArrays(1, &VertexArrayID);
@@ -431,9 +453,9 @@ public:
 	}
 
 	void rotate_camera(GLfloat mouse_x_delta, GLfloat mouse_y_delta, GLfloat pitch_delta) {
-		vec3 cur_forward = get_forward();
-		vec3 cur_head = camera_head;
-		vec3 cur_right = get_right();
+		glm::vec3 cur_forward = get_forward();
+		glm::vec3 cur_head = camera_head;
+		glm::vec3 cur_right = get_right();
 		// turn up
 		cur_forward = cur_forward * cosf(mouse_y_delta) - cur_head * sinf(mouse_y_delta);
 		cur_head = calc_head(cur_right, cur_forward);
@@ -450,7 +472,7 @@ public:
 
 	[[nodiscard]] size_t load_shader(const std::string& shader_path) {
 		GLuint programID = LoadShaders((cwd + shader_path + ".vertexshader").c_str(),
-								   	   (cwd + shader_path+ ".fragmentshader").c_str());
+								   	   (cwd + shader_path + ".fragmentshader").c_str());
 		shaders.push_back(programID);
 		return shaders.size() - 1;
 	}
@@ -461,6 +483,18 @@ public:
 		return textures.size() - 1;
 	}
 
+	// ONLY MAX_LIGHTS LIGHTS CAN BE AVALIABLE SIMULTANEOUSLY OTHERWISE UB
+	////
+	void add_light(size_t object, glm::vec3 color, GLfloat intensity) {
+		
+	}
+
+	////
+	void remove_light(size_t object) {
+
+	}
+
+	////
 	size_t add_object(MyObjectRaw obj, std::string label) {
 		GLuint matrixID = glGetUniformLocation(shaders[obj.program_id], "MVP");
 
@@ -472,26 +506,6 @@ public:
 		glGenBuffers(1, &colorBufferID);
 		glBindBuffer(GL_ARRAY_BUFFER, colorBufferID);
 		glBufferData(GL_ARRAY_BUFFER, obj.colors.size() * sizeof(GLfloat), obj.colors.data(), GL_STATIC_DRAW);
-		obj.normals.clear();
-		for (size_t i = 0; i < obj.verts.size() / 9; ++i) {
-			GLfloat x1 = obj.verts[9 * i + 0];
-			GLfloat y1 = obj.verts[9 * i + 1];
-			GLfloat z1 = obj.verts[9 * i + 2];
-			GLfloat x2 = obj.verts[9 * i + 3];
-			GLfloat y2 = obj.verts[9 * i + 4];
-			GLfloat z2 = obj.verts[9 * i + 5];
-			GLfloat x3 = obj.verts[9 * i + 6];
-			GLfloat y3 = obj.verts[9 * i + 7];
-			GLfloat z3 = obj.verts[9 * i + 8];
-			vec3 v1{x1 - x2, y1 - y2, z1 - z2};
-			vec3 v2{x3 - x2, y3 - y2, z3 - z2};
-			vec3 norm = cross(v1, v2);
-			for (int j = 0; j < 3; ++j) {
-				obj.normals.push_back(norm[0]);
-				obj.normals.push_back(norm[1]);
-				obj.normals.push_back(norm[2]);
-			}
-		}
 		GLuint normalBufferID;
 		glGenBuffers(1, &normalBufferID);
 		glBindBuffer(GL_ARRAY_BUFFER, normalBufferID);
@@ -514,6 +528,7 @@ public:
 		return objects.size() - 1;
 	}
 
+	////
 	void update() {
 		recalculate_view();
 		recalculate_projection();
@@ -584,6 +599,7 @@ public:
 		file_to_load >> camera_pos >> camera_look >> camera_head >> projection >> view;
 		file_to_load.close();
 		printf("LOAD IS SUCCESFULL\n");
+		////
 		save(filename + "loaded");
 	}
 };
@@ -593,19 +609,19 @@ std::vector<GLfloat> get_vert_sphere(GLfloat radius, int triangles_in_height, in
 	GLfloat angle_height = PI / triangles_in_height;
 	GLfloat angle_width = 2 * PI / triangles_in_width;
 	std::vector<GLfloat> result;
-	std::vector<vec3> lst_points(triangles_in_width + 1, {0, 0, radius});
+	std::vector<glm::vec3> lst_points(triangles_in_width + 1, {0, 0, radius});
 	for (int k = 1; k <= triangles_in_height; ++k) {
 		// calculate new points
-		std::vector<vec3> new_points;
+		std::vector<glm::vec3> new_points;
 		if (k == triangles_in_height) {
-			new_points = std::vector<vec3>(triangles_in_width + 1, {0, 0, -radius});
+			new_points = std::vector<glm::vec3>(triangles_in_width + 1, {0, 0, -radius});
 		} else {
 			for (int j = 0; j < triangles_in_width; ++j) {
 				GLfloat cur_angle_height = angle_height * k;
 				GLfloat cur_angle_width = angle_width * j;
 				new_points.push_back({radius*sinf(cur_angle_height)*cosf(cur_angle_width),
-									radius*sinf(cur_angle_height)*sinf(cur_angle_width),
-									radius*cosf(cur_angle_height)});
+									  radius*sinf(cur_angle_height)*sinf(cur_angle_width),
+									  radius*cosf(cur_angle_height)});
 			}
 			new_points.push_back(new_points[0]);
 		}
@@ -638,7 +654,7 @@ std::vector<GLfloat> get_uv_simple(const std::vector<GLfloat>& vert) {
 	return result;
 }
 
-std::vector<GLfloat> get_color_simple(const std::vector<GLfloat>& vert, vec3 color) {
+std::vector<GLfloat> get_color_simple(const std::vector<GLfloat>& vert, glm::vec3 color) {
 	std::vector<GLfloat> result;
 	for (int k = 0; k < vert.size() / 3; ++k) {
 		result.push_back(color[0]); result.push_back(color[1]); result.push_back(color[2]);
@@ -690,7 +706,7 @@ int main(int argc, char* argv[])
 {
 	// remember current working directory
 	char dir[1024];
-   	getcwd( dir, sizeof( dir ) );
+   	getcwd(dir, sizeof(dir));
    	std::string cwd = dir;
 	cwd += "/../homework02/";
 
@@ -732,6 +748,7 @@ int main(int argc, char* argv[])
 	MyObjectRaw fireball_raw(fireball_vert, false, 0.5);
 	fireball_raw.set_texture(texture_uv_fireball, "textureSamplerFireball", fireball_uv, shader_fireball);
 
+	////
 	// fireball hit sphere
 	std::vector<GLfloat> fireball_hit_vert = get_vert_sphere(0.25, 4, 8);
 	std::vector<GLfloat> fireball_hit_col = get_color_simple(fireball_hit_vert, {0, 1, 0});
@@ -753,13 +770,6 @@ int main(int argc, char* argv[])
 	myScene.add_object(fireball_hit_raw, TYPE_FIREBALL_HIT);
 	const int MAX_EFFECT_FIREBALL_HIT = 30;
 	int effect_fireball_hit = -1;
-
-	////////////
-	size_t tmp = myScene.add_object(fireball_raw, "");
-	myScene[tmp].translation = {10.0, 0.0, 0.0};
-	tmp = myScene.add_object(fireball_raw, "");
-	myScene[tmp].translation = {0.0, 0.0, 10.0};
-	////////////
 
 	long long ticks = 0;
 	long long last_fps_ms = 0;
@@ -806,7 +816,6 @@ int main(int argc, char* argv[])
 				if (!myScene[obj].is_deleted) sphere_fireballs.push_back(obj);
 			}
 		}
-		//myScene[sky].is_deleted = true;
 
 
 		// delete objects
@@ -821,6 +830,7 @@ int main(int argc, char* argv[])
 					boom = true;
 					myScene[*fireball].is_deleted = true;
 					myScene[*enemy].is_deleted = true;
+					myScene.remove_light(*fireball);
 					sphere_fireballs.erase(fireball++);
 					pyramid_enemies.erase(enemy++);
 					break;
@@ -836,9 +846,9 @@ int main(int argc, char* argv[])
 		if (current_ms() - enemy_last_spawn_time >= ENEMY_SPAWN_DELTA) {
 			size_t pyramid = myScene.add_object(pyramid_enemy_raw, TYPE_PYRAMID_ENEMY);
 			myScene[pyramid].translation = glm::vec3(random(-1, 1) * ENEMY_SPAWN_RADIUS,
-												     random(-1, 1) * ENEMY_SPAWN_RADIUS,
-													 random(-1, 1) * ENEMY_SPAWN_RADIUS);
-			//myScene[pyramid].rotation_angle = random(-1, 1) * PI;
+											    random(-1, 1) * ENEMY_SPAWN_RADIUS,
+												random(-1, 1) * ENEMY_SPAWN_RADIUS) + myScene.camera_pos;
+			myScene[pyramid].rotation_angle = random(-1, 1) * PI;
 			myScene[pyramid].speed = glm::vec3(random(-1, 1), random(-1, 1), 0) * PYRAMID_ENEMY_SPEED;
 			pyramid_enemies.push_back(pyramid);
 			enemy_last_spawn_time = current_ms();
@@ -850,6 +860,7 @@ int main(int argc, char* argv[])
 			  	myScene[fireball].translation += (-myScene.camera_head + myScene.get_right()) * 0.5f;
 				myScene[fireball].rotation_axis = myScene.get_forward();
 			  	myScene[fireball].speed = myScene.get_forward() * FIREBALL_SPEED;
+				myScene.add_light(fireball, FIREBALL_LIGHT_COLOR, FIREBALL_LIGHT_INTENSITY);
 			  	sphere_fireballs.push_back(fireball);
 			  	fireball_last_spawn_time = current_ms();
 			}
@@ -857,7 +868,7 @@ int main(int argc, char* argv[])
 
 
 		// change camera pos
-		vec3 delta_cam_pos;
+		glm::vec3 delta_cam_pos;
 		GLfloat current_speed = ((glfwGetKey(window, KEY_SPRINT ) == GLFW_PRESS) ? HUMAN_SPRINT_SPEED : HUMAN_SPEED);
 		if (glfwGetKey(window, KEY_FORWARD) == GLFW_PRESS) {
 			delta_cam_pos += myScene.get_forward();
@@ -877,7 +888,7 @@ int main(int argc, char* argv[])
 		if (glfwGetKey(window, KEY_LOWER) == GLFW_PRESS) {
 			delta_cam_pos += -myScene.camera_head;
 		}
-		if (glm::length(delta_cam_pos) > 0) {
+		if (length(delta_cam_pos) > 0) {
 			delta_cam_pos = normalize(delta_cam_pos) * current_speed * delta_time;
 			myScene.camera_pos += delta_cam_pos;
 			myScene.camera_look += delta_cam_pos;
@@ -925,9 +936,9 @@ int main(int argc, char* argv[])
 		bool new_load_button_was_pressed = (glfwGetKey(window, KEY_LOAD) == GLFW_PRESS);
 		bool new_save_button_was_pressed = (glfwGetKey(window, KEY_SAVE) == GLFW_PRESS);
 		// load scene
-		if (load_button_was_pressed && !new_load_button_was_pressed) myScene.load("/home/gordei/tmp/file");
+		if (load_button_was_pressed && !new_load_button_was_pressed) myScene.load(FILENAME_SAVE);
 		// save scene
-		if (save_button_was_pressed && !new_save_button_was_pressed) myScene.save("/home/gordei/tmp/file");
+		if (save_button_was_pressed && !new_save_button_was_pressed) myScene.save(FILENAME_SAVE);
 		// update buttons states
 		load_button_was_pressed = new_load_button_was_pressed;
 		save_button_was_pressed = new_save_button_was_pressed;

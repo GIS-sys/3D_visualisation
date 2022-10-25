@@ -1,5 +1,5 @@
 #version 330 core
-#define MAX_LIGHTS 2
+#define MAX_LIGHTS 256
 
 // Input vertex data, different for all executions of this shader.
 layout(location = 0) in vec3 vertexPosition_modelspace;
@@ -22,9 +22,9 @@ uniform vec3 light_positions[MAX_LIGHTS];
 void main() {
 	const float AMBIENT_COEFF = 0.1;
 	const float AMBIENT_POWER = 0.2;
-	const float DIFFUSION_COEFF = 1.0;
-	const float SPECULAR_COEFF = 1.0;
-	const float SPECULAR_POWER = 64.0;
+	const float DIFFUSION_COEFF = 2.0;
+	const float SPECULAR_COEFF = 2.0;
+	const float SPECULAR_POWER = 16.0;
 
 	gl_Position =  MVP * vec4(vertexPosition_modelspace, 1);
 
