@@ -42,12 +42,13 @@ const std::string TYPE_SKY = "sky";
 const std::string TYPE_FIREBALL_HIT = "fireball_hit";
 const std::string TYPE_FIREBALL = "fireball";
 const std::string TYPE_PYRAMID_ENEMY = "pyramid_enemy";
-const long long ENEMY_SPAWN_DELTA = 2500;
+const long long ENEMY_SPAWN_DELTA = 500;
 const long long ENEMY_SPAWN_RADIUS = 10;
 const long long FIREBALL_COOLDOWN = 300;
 const long long SCREEN_WIDTH = 1024;
 const long long SCREEN_HEIGHT = 1024;
-const GLfloat PYRAMID_ENEMY_SPEED = 0.001f;
+const GLfloat PYRAMID_ENEMY_SPEED = 0.00001f;
+const GLfloat PYRAMID_ENEMY_ROTATION_RATE = 0.001f;
 const GLfloat FIREBALL_SPEED = 0.05f;
 const GLfloat FIREBALL_ROTATION_RATE = 0.005f;
 const GLfloat HUMAN_SPEED = 0.005f;
@@ -160,6 +161,7 @@ struct MyObjectRaw {
 	bool is_transparent = false;
 
 	std::vector<GLfloat> colors;
+	std::vector<GLfloat> normals;
 	GLuint program_id = 0;
 	GLuint texture_id = 0;
 	std::string sampler;
@@ -196,6 +198,7 @@ private:
 		GLuint texture = 0;
 		GLuint matrix = 0;
 		GLuint vertex = 0;
+		GLuint normal = 0;
 		GLuint color = 0;
 		std::string sampler;
 		int triangles_amount = 0;
@@ -211,11 +214,20 @@ private:
 		glm::vec3 speed{0.0f, 0.0f, 0.0f};
 		std::string label;
 
-		glm::mat4 calculate_model() {
-			glm::mat4 modelScaleMatrix = glm::scale(scale);
-			glm::mat4 modelRotationMatrix = glm::rotate(rotation_angle, rotation_axis);
-			glm::mat4 modelTranslationMatrix = glm::translate(translation);
-			return modelTranslationMatrix * modelRotationMatrix * modelScaleMatrix;
+		glm::mat4 calculate_scale_matrix() const {
+			return glm::scale(scale);
+		}
+
+		glm::mat4 calculate_rotation_matrix() const {
+			return glm::rotate(rotation_angle, rotation_axis);
+		}
+
+		glm::mat4 calculate_translation_matrix() const {
+			return glm::translate(translation);
+		}
+
+		glm::mat4 calculate_model_matrix() const {
+			return calculate_translation_matrix() * calculate_rotation_matrix() * calculate_scale_matrix();
 		}
 
 		GLfloat get_collider_radius() const {
@@ -228,6 +240,7 @@ private:
 			ofs << obj.texture << std::endl;
 			ofs << obj.matrix << std::endl;
 			ofs << obj.vertex << std::endl;
+			ofs << obj.normal << std::endl;
 			ofs << obj.color << std::endl;
 			ofs << "[" << obj.sampler << std::endl;
 			ofs << obj.triangles_amount << std::endl;
@@ -246,6 +259,7 @@ private:
 			ifs >> obj.texture;
 			ifs >> obj.matrix;
 			ifs >> obj.vertex;
+			ifs >> obj.normal;
 			ifs >> obj.color;
 			ifs >> obj.sampler; obj.sampler = obj.sampler.substr(1);
 			ifs >> obj.triangles_amount;
@@ -263,6 +277,8 @@ private:
 
 	std::string cwd;
 	GLuint VertexArrayID;
+	GLuint ColorArrayID;
+	GLuint NormalArrayID;
 	std::vector<MyObject> objects;
 	std::vector<GLuint> shaders;
 	std::vector<GLuint> textures;
@@ -279,7 +295,9 @@ private:
 	}
 
 	void update_single_object(MyObject& obj) {
-		glm::mat4 MVP = projection * view * obj.calculate_model();
+		glm::mat4 model_rotation = obj.calculate_rotation_matrix();
+		glm::mat4 model = obj.calculate_model_matrix();
+		glm::mat4 MVP = projection * view * model;
 
 		if (obj.is_texture_instead_of_color) {
 			// Get a handle for our "...Sampler" uniform
@@ -299,11 +317,23 @@ private:
 		if (obj.is_texture_instead_of_color) color_size = 2;
 		glBindBuffer(GL_ARRAY_BUFFER, obj.color);
 		glVertexAttribPointer(1, color_size, GL_FLOAT, GL_FALSE, 0, (void*)0);
+		// Set [normals] buffer ID: 2, size: 3, normalised: false
+		glBindBuffer(GL_ARRAY_BUFFER, obj.normal);
+		glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
 		// Use shader
 		glUseProgram(obj.program);
 		glUniformMatrix4fv(obj.matrix, 1, GL_FALSE, &MVP[0][0]);
-		std::vector<vec3> light{{0.5f, 0.0f, 1.0f}, {0.0f, 0.5f, 0.0f}};
-		glUniform3fv(glGetUniformLocation(obj.program, "light"), 2, &light[0][0]);
+		// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		std::vector<vec3> light_colors{{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
+		std::vector<vec3> light_positions{{0.0f, 0.0f, 10.0f}, {10.0f, 0.0f, 0.0f}};
+		int lights_amount = light_colors.size();
+		glUniformMatrix4fv(glGetUniformLocation(obj.program, "model_matrix"), 1, GL_FALSE, &model[0][0]);
+		glUniformMatrix4fv(glGetUniformLocation(obj.program, "model_rotation_matrix"), 1, GL_FALSE, &model_rotation[0][0]);
+		glUniform3fv(glGetUniformLocation(obj.program, "camera_pos"), 1, &camera_pos[0]);
+		glUniform3fv(glGetUniformLocation(obj.program, "camera_look"), 1, &camera_look[0]);
+		glUniform1i(glGetUniformLocation(obj.program, "lights_amount"), lights_amount);
+		glUniform3fv(glGetUniformLocation(obj.program, "light_colors"), light_colors.size(), &light_colors[0][0]);
+		glUniform3fv(glGetUniformLocation(obj.program, "light_positions"), light_positions.size(), &light_positions[0][0]);
 		// Draw
 		glDrawArrays(GL_TRIANGLES, 0, obj.triangles_amount);
 	}
@@ -366,6 +396,10 @@ public:
 		// create memory for vertices
 		glGenVertexArrays(1, &VertexArrayID);
 		glBindVertexArray(VertexArrayID);
+		glGenVertexArrays(1, &ColorArrayID);
+		glBindVertexArray(ColorArrayID);
+		glGenVertexArrays(1, &NormalArrayID);
+		glBindVertexArray(NormalArrayID);
 	}
 
 	~MyScene() {
@@ -438,18 +472,44 @@ public:
 		glGenBuffers(1, &colorBufferID);
 		glBindBuffer(GL_ARRAY_BUFFER, colorBufferID);
 		glBufferData(GL_ARRAY_BUFFER, obj.colors.size() * sizeof(GLfloat), obj.colors.data(), GL_STATIC_DRAW);
+		obj.normals.clear();
+		for (size_t i = 0; i < obj.verts.size() / 9; ++i) {
+			GLfloat x1 = obj.verts[9 * i + 0];
+			GLfloat y1 = obj.verts[9 * i + 1];
+			GLfloat z1 = obj.verts[9 * i + 2];
+			GLfloat x2 = obj.verts[9 * i + 3];
+			GLfloat y2 = obj.verts[9 * i + 4];
+			GLfloat z2 = obj.verts[9 * i + 5];
+			GLfloat x3 = obj.verts[9 * i + 6];
+			GLfloat y3 = obj.verts[9 * i + 7];
+			GLfloat z3 = obj.verts[9 * i + 8];
+			vec3 v1{x1 - x2, y1 - y2, z1 - z2};
+			vec3 v2{x3 - x2, y3 - y2, z3 - z2};
+			vec3 norm = cross(v1, v2);
+			for (int j = 0; j < 3; ++j) {
+				obj.normals.push_back(norm[0]);
+				obj.normals.push_back(norm[1]);
+				obj.normals.push_back(norm[2]);
+			}
+		}
+		GLuint normalBufferID;
+		glGenBuffers(1, &normalBufferID);
+		glBindBuffer(GL_ARRAY_BUFFER, normalBufferID);
+		glBufferData(GL_ARRAY_BUFFER, obj.normals.size() * sizeof(GLfloat), obj.normals.data(), GL_STATIC_DRAW);
 
 		MyObject new_object;
 		new_object.program = shaders[obj.program_id];
 		new_object.texture = textures[obj.texture_id];
 		new_object.matrix = matrixID;
 		new_object.vertex = vertexBufferID;
+		new_object.normal = normalBufferID;
 		new_object.color = colorBufferID;
 		new_object.is_transparent = obj.is_transparent;
 		new_object.collider_radius = obj.collider_radius;
 		new_object.is_texture_instead_of_color = obj.is_texture_instead_of_color;
 		new_object.triangles_amount = obj.verts.size() / 3;
 		new_object.label = label;
+
 		objects.push_back(new_object);
 		return objects.size() - 1;
 	}
@@ -464,6 +524,7 @@ public:
 		// Enable buffers with attributes
 		glEnableVertexAttribArray(0);
 		glEnableVertexAttribArray(1);
+		glEnableVertexAttribArray(2);
 
 		// Start of drawing solid things
 		for (auto& obj : objects) {
@@ -487,6 +548,7 @@ public:
 
 		glDisableVertexAttribArray(0);
 		glDisableVertexAttribArray(1);
+		glDisableVertexAttribArray(2);
 		// Disable buffers with attributes
 
 		// Swap buffers
@@ -550,8 +612,8 @@ std::vector<GLfloat> get_vert_sphere(GLfloat radius, int triangles_in_height, in
 		// add triangles
 		for (int j = 0; j < triangles_in_width; ++j) {
 			if (new_points[j+0] != new_points[j+1]) {
-				result.push_back(new_points[j+0][0]); result.push_back(new_points[j+0][1]); result.push_back(new_points[j+0][2]);
 				result.push_back(new_points[j+1][0]); result.push_back(new_points[j+1][1]); result.push_back(new_points[j+1][2]);
+				result.push_back(new_points[j+0][0]); result.push_back(new_points[j+0][1]); result.push_back(new_points[j+0][2]);
 				result.push_back(lst_points[j+0][0]); result.push_back(lst_points[j+0][1]); result.push_back(lst_points[j+0][2]);
 			}
 			if (lst_points[j+0] != lst_points[j+1]) {
@@ -671,14 +733,18 @@ int main(int argc, char* argv[])
 	fireball_raw.set_texture(texture_uv_fireball, "textureSamplerFireball", fireball_uv, shader_fireball);
 
 	// fireball hit sphere
-	std::vector<GLfloat> fireball_hit_vert = get_vert_sphere(0.5, 4, 8);
+	std::vector<GLfloat> fireball_hit_vert = get_vert_sphere(0.25, 4, 8);
 	std::vector<GLfloat> fireball_hit_col = get_color_simple(fireball_hit_vert, {0, 1, 0});
-	MyObjectRaw fireball_hit_raw(fireball_hit_vert, true, 0.5);
+	MyObjectRaw fireball_hit_raw(fireball_hit_vert, true, 0.25);
 	fireball_hit_raw.set_colors(fireball_hit_col, shader_fireball_hit);
 
 	// enemy
-	std::vector<GLfloat> pyramid_enemy_vert = vector_from_file(cwd + "models/pyramid.vert");
+	/*std::vector<GLfloat> pyramid_enemy_vert = vector_from_file(cwd + "models/pyramid.vert");
 	std::vector<GLfloat> pyramid_enemy_col = vector_from_file(cwd + "models/pyramid.col");
+	MyObjectRaw pyramid_enemy_raw(pyramid_enemy_vert, false, sqrtf(3) / 2);
+	pyramid_enemy_raw.set_colors(pyramid_enemy_col, shader_pyramid_enemy);*/
+	std::vector<GLfloat> pyramid_enemy_vert = get_vert_sphere(sqrtf(3), 128, 256);
+	std::vector<GLfloat> pyramid_enemy_col = get_color_simple(pyramid_enemy_vert, {1, 1, 1});
 	MyObjectRaw pyramid_enemy_raw(pyramid_enemy_vert, false, sqrtf(3) / 2);
 	pyramid_enemy_raw.set_colors(pyramid_enemy_col, shader_pyramid_enemy);
 
@@ -687,6 +753,13 @@ int main(int argc, char* argv[])
 	myScene.add_object(fireball_hit_raw, TYPE_FIREBALL_HIT);
 	const int MAX_EFFECT_FIREBALL_HIT = 30;
 	int effect_fireball_hit = -1;
+
+	////////////
+	size_t tmp = myScene.add_object(fireball_raw, "");
+	myScene[tmp].translation = {10.0, 0.0, 0.0};
+	tmp = myScene.add_object(fireball_raw, "");
+	myScene[tmp].translation = {0.0, 0.0, 10.0};
+	////////////
 
 	long long ticks = 0;
 	long long last_fps_ms = 0;
@@ -733,6 +806,7 @@ int main(int argc, char* argv[])
 				if (!myScene[obj].is_deleted) sphere_fireballs.push_back(obj);
 			}
 		}
+		//myScene[sky].is_deleted = true;
 
 
 		// delete objects
@@ -764,7 +838,7 @@ int main(int argc, char* argv[])
 			myScene[pyramid].translation = glm::vec3(random(-1, 1) * ENEMY_SPAWN_RADIUS,
 												     random(-1, 1) * ENEMY_SPAWN_RADIUS,
 													 random(-1, 1) * ENEMY_SPAWN_RADIUS);
-			myScene[pyramid].rotation_angle = random(-1, 1) * PI;
+			//myScene[pyramid].rotation_angle = random(-1, 1) * PI;
 			myScene[pyramid].speed = glm::vec3(random(-1, 1), random(-1, 1), 0) * PYRAMID_ENEMY_SPEED;
 			pyramid_enemies.push_back(pyramid);
 			enemy_last_spawn_time = current_ms();
@@ -825,6 +899,7 @@ int main(int argc, char* argv[])
 			myScene[fireball].translation += myScene[fireball].speed * delta_time;
 		}
 		for (size_t enemy : pyramid_enemies) {
+			myScene[enemy].rotation_angle += PYRAMID_ENEMY_ROTATION_RATE * delta_time;
 			myScene[enemy].translation += myScene[enemy].speed * delta_time;
 		}
 		myScene[sky].translation = myScene.camera_pos;
