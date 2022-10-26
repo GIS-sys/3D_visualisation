@@ -15,30 +15,36 @@ uniform mat4 model_matrix;
 uniform mat4 model_rotation_matrix;
 uniform vec3 camera_pos;
 uniform vec3 raw_camera_look;
-uniform int lights_amount;
-uniform vec4 light_colors[MAX_LIGHTS];
-uniform vec3 light_positions[MAX_LIGHTS];
+uniform int point_lights_amount;
+uniform vec4 point_light_colors[MAX_LIGHTS];
+uniform vec3 point_light_positions[MAX_LIGHTS];
+uniform int directional_lights_amount;
+uniform vec4 directional_light_colors[MAX_LIGHTS];
+uniform vec3 directional_light_directions[MAX_LIGHTS];
+uniform vec3 sky_light_color;
+
+vec3 gauroud_shading() {
+	
+}
 
 void main() {
 	const float AMBIENT_COEFF = 0.1;
 	const float DIFFUSION_COEFF = 2.0;
 	const float SPECULAR_COEFF = 2.0;
 	const float SPECULAR_POWER = 128.0;
-	const vec4 MOON_LIGHT_COLOR = vec4(0.1, 0.1, 0.2, 1);
-	const vec3 MOON_LIGHT_DIRECTION = vec3(0, 3, -1);
 
 	gl_Position =  MVP * vec4(vertexPosition_modelspace, 1);
 
-	vec3 color = vec3(0.0, 0.0, 0.0); // blue sky
+	vec3 color = sky_light_color; // blue sky
 	vec3 vertex_position = vec3(model_matrix * vec4(vertexPosition_modelspace, 1));
 	vec3 vertex_normal = normalize(vec3(model_rotation_matrix * vec4(vertexNormal_modelspace, 1)));
 	vec3 camera_look = normalize(raw_camera_look);
 
 	// point lights
 	for (int light = 0; light < MAX_LIGHTS; ++light) {
-		if (light == lights_amount) break;
-		float attenuation = 1.0f / sqrt(distance(light_positions[light], vertex_position));
-		vec3 light_direction = normalize(vertex_position - light_positions[light]);
+		if (light == point_lights_amount) break;
+		float attenuation = 1.0f / sqrt(distance(point_light_positions[light], vertex_position));
+		vec3 light_direction = normalize(vertex_position - point_light_positions[light]);
 		// ambient
 		float ambient = AMBIENT_COEFF;
 		// diffuse
@@ -51,11 +57,11 @@ void main() {
 		if (specular <= 0.0f) specular = 0.0f;
 		else specular = SPECULAR_COEFF * pow(specular, SPECULAR_POWER);
 		// result
-		color += light_colors[light][3] * vec3(light_colors[light]) * attenuation * (diffuse + specular + ambient);
+		color += point_light_colors[light][3] * vec3(point_light_colors[light]) * attenuation * (diffuse + specular + ambient);
 	}
 	// line light
 	float attenuation = 1.0f;
-	vec3 light_direction = normalize(MOON_LIGHT_DIRECTION);
+	vec3 light_direction = normalize(directional_light_directions[0]);
 	// ambient
 	float ambient = AMBIENT_COEFF;
 	// diffuse
@@ -68,7 +74,7 @@ void main() {
 	if (specular <= 0.0f) specular = 0.0f;
 	else specular = SPECULAR_COEFF * pow(specular, SPECULAR_POWER);
 	// result
-	color += MOON_LIGHT_COLOR[3] * vec3(MOON_LIGHT_COLOR) * attenuation * (diffuse + specular + ambient);
+	color += directional_light_colors[0][3] * vec3(directional_light_colors[0]) * attenuation * (diffuse + specular + ambient);
 
 	color = min(color, 1);
 	color = max(color, 0);

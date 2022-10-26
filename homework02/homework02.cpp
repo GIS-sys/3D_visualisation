@@ -62,7 +62,7 @@ const GLfloat HUMAN_SPEED = 0.005f;
 const GLfloat HUMAN_SPRINT_SPEED = 0.05f;
 const GLfloat MOUSE_SPEED = 0.002f;
 const GLfloat PITCH_SPEED = 0.003f;
-const GLfloat DESPAWN_DISTANCE_IN_MAX_DISTANCE = 1.0f;
+const GLfloat DESPAWN_DISTANCE_IN_MAX_DISTANCE = 2.0f;
 const std::string FILENAME_SAVE = "/home/gordei/tmp/file";
 
 const int KEY_EXIT = GLFW_KEY_ESCAPE;
@@ -175,6 +175,28 @@ std::ifstream& operator>>(std::ifstream& ifs, std::vector<T>& vec) {
 	vec.resize(size);
 	for (auto& x : vec) {
 		ifs >> x;
+	}
+	return ifs;
+}
+
+template <>
+std::ofstream& operator<<(std::ofstream& ofs, const std::vector<std::string>& vec) {
+	ofs << vec.size() << std::endl;
+	for (const auto& x : vec) {
+		ofs << "[" << x << std::endl;
+	}
+	return ofs;
+}
+
+template <>
+std::ifstream& operator>>(std::ifstream& ifs, std::vector<std::string>& vec) {
+	size_t size = 0;
+	ifs >> size;
+	vec.clear();
+	vec.resize(size);
+	for (auto& x : vec) {
+		ifs >> x;
+		x = x.substr(1);
 	}
 	return ifs;
 }
@@ -335,8 +357,12 @@ private:
 	// actually no need to save these as they are recalculated before use, though save for now
 	glm::mat4 projection;
 	glm::mat4 view;
-	std::vector<glm::vec3> light_positions;
-	std::vector<glm::vec4> light_colors;
+	std::vector<glm::vec3> point_light_positions;
+	std::vector<glm::vec4> point_light_colors;
+	std::vector<glm::vec3> directional_light_directions;
+	std::vector<glm::vec4> directional_light_colors;
+	std::vector<std::string> directional_light_labels;
+	glm::vec3 sky_light_color;
 
 	void recalculate_projection() {
 		projection = glm::perspective(projection_angle, projection_ratio, projection_dist_min, projection_dist_max);
@@ -347,12 +373,12 @@ private:
 	}
 
 	void recalculate_lights() {
-		light_positions.clear();
-		light_colors.clear();
+		point_light_positions.clear();
+		point_light_colors.clear();
 		for (size_t obj = 0; obj != objects.size(); ++obj) {
 			if (!objects[obj].is_deleted && objects[obj].light_intensity > 0) {
-				light_positions.push_back(objects[obj].translation);
-				light_colors.push_back(glm::vec4(objects[obj].light_color, objects[obj].light_intensity));
+				point_light_positions.push_back(objects[obj].translation);
+				point_light_colors.push_back(glm::vec4(objects[obj].light_color, objects[obj].light_intensity));
 			}
 		}
 	}
@@ -391,9 +417,14 @@ private:
 		glUniformMatrix4fv(glGetUniformLocation(obj.program, "model_rotation_matrix"), 1, GL_FALSE, &model_rotation[0][0]);
 		glUniform3fv(glGetUniformLocation(obj.program, "camera_pos"), 1, &camera_pos[0]);
 		glUniform3fv(glGetUniformLocation(obj.program, "raw_camera_look"), 1, &camera_look[0]);
-		glUniform1i(glGetUniformLocation(obj.program, "lights_amount"), light_colors.size());
-		glUniform4fv(glGetUniformLocation(obj.program, "light_colors"), light_colors.size(), &light_colors[0][0]);
-		glUniform3fv(glGetUniformLocation(obj.program, "light_positions"), light_positions.size(), &light_positions[0][0]);
+		glUniform1i(glGetUniformLocation(obj.program, "point_lights_amount"), point_light_colors.size());
+		glUniform4fv(glGetUniformLocation(obj.program, "point_light_colors"), point_light_colors.size(), &point_light_colors[0][0]);
+		glUniform3fv(glGetUniformLocation(obj.program, "point_light_positions"), point_light_positions.size(), &point_light_positions[0][0]);
+		glUniform1i(glGetUniformLocation(obj.program, "directional_lights_amount"), directional_light_colors.size());
+		glUniform4fv(glGetUniformLocation(obj.program, "directional_light_colors"), directional_light_colors.size(), &directional_light_colors[0][0]);
+		glUniform3fv(glGetUniformLocation(obj.program, "directional_light_directions"), directional_light_directions.size(), &directional_light_directions[0][0]);
+		glUniform3fv(glGetUniformLocation(obj.program, "sky_light_color"), 1, &sky_light_color[0]);
+
 		// Draw
 		glDrawArrays(GL_TRIANGLES, 0, obj.triangles_amount);
 	}
@@ -476,6 +507,10 @@ public:
 		return objects.size();
 	}
 
+	size_t amount_of_directional_lights() const {
+		return directional_light_colors.size();
+	}
+
 	MyObject& operator[](size_t k) {
 		return objects[k];
 	}
@@ -520,12 +555,22 @@ public:
 	}
 
 	// ONLY MAX_LIGHTS LIGHTS CAN BE AVALIABLE SIMULTANEOUSLY OTHERWISE UB
-	void add_light(size_t object, glm::vec3 color, GLfloat intensity) {
+	void attach_point_light(size_t object, glm::vec3 color, GLfloat intensity) {
 		objects[object].light_color = color;
 		objects[object].light_intensity = intensity;
 	}
 
-	void remove_light(size_t object) {
+	void add_directional_light(const glm::vec3& new_dir_light_direction, const glm::vec4& new_dir_light_color, const std::string& new_dir_light_label) {
+		directional_light_colors.push_back(new_dir_light_color);
+		directional_light_labels.push_back(new_dir_light_label);
+		directional_light_directions.push_back(new_dir_light_direction);
+	}
+
+	void set_sky_light(const glm::vec3& new_sky_light_color) {
+		sky_light_color = new_sky_light_color;
+	}
+
+	void remove_point_light(size_t object) {
 		objects[object].light_color = glm::vec3(0);
 		objects[object].light_intensity = 0;
 	}
@@ -609,7 +654,7 @@ public:
 	void despawn_far() {
 		for (size_t obj = 0; obj != objects.size(); ++obj) {
 			if (glm::distance(objects[obj].translation, camera_pos) >= DESPAWN_DISTANCE_IN_MAX_DISTANCE * projection_dist_max) {
-				remove_light(obj);
+				remove_point_light(obj);
 				objects[obj].is_deleted = true;
 			}
 		}
@@ -625,7 +670,10 @@ public:
 		file_to_save << projection_dist_max << std::endl;
 		file_to_save << shaders << textures;
 		file_to_save << objects;
-		file_to_save << light_positions << light_colors;
+		file_to_save << point_light_positions << point_light_colors;
+		file_to_save << directional_light_directions << directional_light_colors;
+		file_to_save << directional_light_labels;
+		file_to_save << sky_light_color;
 		file_to_save << camera_pos << camera_look << camera_head << projection << view;
 		file_to_save.close();
 		printf("SAVE IS SUCCESFULL\n");
@@ -641,7 +689,10 @@ public:
 		file_to_load >> projection_dist_max;
 		file_to_load >> shaders >> textures;
 		file_to_load >> objects;
-		file_to_load >> light_positions >> light_colors;
+		file_to_load >> point_light_positions >> point_light_colors;
+		file_to_load >> directional_light_directions >> directional_light_colors;
+		file_to_load >> directional_light_labels;
+		file_to_load >> sky_light_color;
 		file_to_load >> camera_pos >> camera_look >> camera_head >> projection >> view;
 		file_to_load.close();
 		printf("LOAD IS SUCCESFULL\n");
@@ -879,7 +930,7 @@ int main(int argc, char* argv[])
 					boom = myScene[*fireball].translation;
 					myScene[*fireball].is_deleted = true;
 					myScene[*enemy].is_deleted = true;
-					myScene.remove_light(*fireball);
+					myScene.remove_point_light(*fireball);
 					sphere_fireballs.erase(fireball++);
 					pyramid_enemies.erase(enemy++);
 					break;
@@ -909,7 +960,7 @@ int main(int argc, char* argv[])
 			  	myScene[fireball].translation += (-myScene.camera_head + myScene.get_right()) * 0.5f;
 				myScene[fireball].rotation_axis = myScene.get_forward();
 			  	myScene[fireball].speed = myScene.get_forward() * FIREBALL_SPEED;
-				myScene.add_light(fireball, FIREBALL_LIGHT_COLOR, FIREBALL_LIGHT_INTENSITY);
+				myScene.attach_point_light(fireball, FIREBALL_LIGHT_COLOR, FIREBALL_LIGHT_INTENSITY);
 			  	sphere_fireballs.push_back(fireball);
 			  	fireball_last_spawn_time = current_ms();
 			}
