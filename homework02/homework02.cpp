@@ -1,7 +1,5 @@
-// HIGH
-// add lighting
-
 // MEDIUM
+// add moon light
 // load save in the next session? add_object - bind_buffer possibly
 // clear memory when loading
 
@@ -36,6 +34,7 @@ GLFWwindow* window;
 
 
 const float PI = glm::pi<float>();
+const float E = glm::pi<float>();
 const GLfloat EPSYLON = 0.001f;
 
 const std::string TYPE_SKY = "sky";
@@ -43,11 +42,16 @@ const std::string TYPE_FIREBALL_HIT = "fireball_hit";
 const std::string TYPE_FIREBALL = "fireball";
 const std::string TYPE_PYRAMID_ENEMY = "pyramid_enemy";
 
-const glm::vec3 FIREBALL_LIGHT_COLOR = {1.0, 0.0, 0.0};
+const std::string MOON_LIGHT_LABEL = "moon";
+const glm::vec4 MOON_LIGHT_COLOR = {0.1, 0.1, 0.2, 1.0};
+const glm::vec3 MOON_LIGHT_DIRECTION = {0.0, 3.0, -1.0};
+const glm::vec3 SKY_LIGHT_COLOR = {0.0, 0.0, 0.0};
+const glm::vec3 FIREBALL_LIGHT_COLOR = {1.0, 0.7, 0.0};
 const float FIREBALL_LIGHT_INTENSITY = 1.0;
-const long long ENEMY_SPAWN_DELTA = 500;
+const long long ENEMY_SPAWN_DELTA = 1500;
 const long long ENEMY_SPAWN_RADIUS = 10;
 const long long FIREBALL_COOLDOWN = 300;
+const int MAX_EFFECT_FIREBALL_HIT = 10;
 const long long SCREEN_WIDTH = 1024;
 const long long SCREEN_HEIGHT = 1024;
 const GLfloat PYRAMID_ENEMY_SPEED = 0.01f;
@@ -58,6 +62,7 @@ const GLfloat HUMAN_SPEED = 0.005f;
 const GLfloat HUMAN_SPRINT_SPEED = 0.05f;
 const GLfloat MOUSE_SPEED = 0.002f;
 const GLfloat PITCH_SPEED = 0.003f;
+const GLfloat DESPAWN_DISTANCE_IN_MAX_DISTANCE = 1.0f;
 const std::string FILENAME_SAVE = "/home/gordei/tmp/file";
 
 const int KEY_EXIT = GLFW_KEY_ESCAPE;
@@ -73,6 +78,8 @@ const int KEY_SPRINT = GLFW_KEY_LEFT_SHIFT;
 const int KEY_FIREBALL = GLFW_KEY_L;
 const int KEY_SAVE = GLFW_KEY_O;
 const int KEY_LOAD = GLFW_KEY_P;
+const int KEY_STOP_OBJECT_MOVEMENT = GLFW_KEY_M;
+const int KEY_RESUME_OBJECT_MOVEMENT = GLFW_KEY_N;
 
 const int MAX_LIGHTS = 256;
 
@@ -111,26 +118,6 @@ GLfloat random(float a, float b) {
 }
 
 
-template <typename T>
-std::ofstream& operator<<(std::ofstream& ofs, const std::vector<T>& vec) {
-	ofs << vec.size() << std::endl;
-	for (const auto& x : vec) {
-		ofs << x << std::endl;
-	}
-	return ofs;
-}
-
-template <typename T>
-std::ifstream& operator>>(std::ifstream& ifs, std::vector<T>& vec) {
-	size_t size = 0;
-	ifs >> size;
-	vec.clear();
-	vec.resize(size);
-	for (auto& x : vec) {
-		ifs >> x;
-	}
-	return ifs;
-}
 
 std::ofstream& operator<<(std::ofstream& ofs, const glm::vec3& vec) {
 	ofs << vec[0] << " " << vec[1] << " " << vec[2] << std::endl;
@@ -139,6 +126,16 @@ std::ofstream& operator<<(std::ofstream& ofs, const glm::vec3& vec) {
 
 std::ifstream& operator>>(std::ifstream& ifs, glm::vec3& vec) {
 	ifs >> vec[0] >> vec[1] >> vec[2];
+	return ifs;
+}
+
+std::ofstream& operator<<(std::ofstream& ofs, const glm::vec4& vec) {
+	ofs << vec[0] << " " << vec[1] << " " << vec[2] << " " << vec[3] << std::endl;
+	return ofs;
+}
+
+std::ifstream& operator>>(std::ifstream& ifs, glm::vec4& vec) {
+	ifs >> vec[0] >> vec[1] >> vec[2] >> vec[3];
 	return ifs;
 }
 
@@ -157,6 +154,27 @@ std::ifstream& operator>>(std::ifstream& ifs, glm::mat4& vec) {
 		for (int j = 0; j < 4; ++j) {
 			ifs >> vec[i][j];
 		}
+	}
+	return ifs;
+}
+
+template <typename T>
+std::ofstream& operator<<(std::ofstream& ofs, const std::vector<T>& vec) {
+	ofs << vec.size() << std::endl;
+	for (const auto& x : vec) {
+		ofs << x << std::endl;
+	}
+	return ofs;
+}
+
+template <typename T>
+std::ifstream& operator>>(std::ifstream& ifs, std::vector<T>& vec) {
+	size_t size = 0;
+	ifs >> size;
+	vec.clear();
+	vec.resize(size);
+	for (auto& x : vec) {
+		ifs >> x;
 	}
 	return ifs;
 }
@@ -229,6 +247,9 @@ private:
 		std::string sampler;
 		int triangles_amount = 0;
 
+		glm::vec3 light_color;
+		GLfloat light_intensity;
+
 		bool is_transparent = false;
 		bool is_texture_instead_of_color = false;
 		bool is_deleted = false;
@@ -270,6 +291,8 @@ private:
 			ofs << obj.color << std::endl;
 			ofs << "[" << obj.sampler << std::endl;
 			ofs << obj.triangles_amount << std::endl;
+			ofs << obj.light_color;
+			ofs << obj.light_intensity << std::endl;
 			ofs << obj.is_transparent << std::endl;
 			ofs << obj.is_texture_instead_of_color << std::endl;
 			ofs << obj.is_deleted << std::endl;
@@ -289,6 +312,8 @@ private:
 			ifs >> obj.color;
 			ifs >> obj.sampler; obj.sampler = obj.sampler.substr(1);
 			ifs >> obj.triangles_amount;
+			ifs >> obj.light_color;
+			ifs >> obj.light_intensity;
 			ifs >> obj.is_transparent;
 			ifs >> obj.is_texture_instead_of_color;
 			ifs >> obj.is_deleted;
@@ -307,8 +332,11 @@ private:
 	std::vector<GLuint> shaders;
 	std::vector<GLuint> textures;
 
+	// actually no need to save these as they are recalculated before use, though save for now
 	glm::mat4 projection;
 	glm::mat4 view;
+	std::vector<glm::vec3> light_positions;
+	std::vector<glm::vec4> light_colors;
 
 	void recalculate_projection() {
 		projection = glm::perspective(projection_angle, projection_ratio, projection_dist_min, projection_dist_max);
@@ -318,7 +346,17 @@ private:
 		view = glm::lookAt(camera_pos, camera_look, camera_head);
 	}
 
-	////
+	void recalculate_lights() {
+		light_positions.clear();
+		light_colors.clear();
+		for (size_t obj = 0; obj != objects.size(); ++obj) {
+			if (!objects[obj].is_deleted && objects[obj].light_intensity > 0) {
+				light_positions.push_back(objects[obj].translation);
+				light_colors.push_back(glm::vec4(objects[obj].light_color, objects[obj].light_intensity));
+			}
+		}
+	}
+
 	void update_single_object(MyObject& obj) {
 		glm::mat4 model_rotation = obj.calculate_rotation_matrix();
 		glm::mat4 model = obj.calculate_model_matrix();
@@ -348,16 +386,13 @@ private:
 		// Use shader
 		glUseProgram(obj.program);
 		glUniformMatrix4fv(obj.matrix, 1, GL_FALSE, &MVP[0][0]);
-		// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-		std::vector<glm::vec3> light_colors{{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
-		std::vector<glm::vec3> light_positions{{0.0f, 0.0f, 10.0f}, {10.0f, 0.0f, 0.0f}};
-		int lights_amount = light_colors.size();
+		// Use many lighting parameters
 		glUniformMatrix4fv(glGetUniformLocation(obj.program, "model_matrix"), 1, GL_FALSE, &model[0][0]);
 		glUniformMatrix4fv(glGetUniformLocation(obj.program, "model_rotation_matrix"), 1, GL_FALSE, &model_rotation[0][0]);
 		glUniform3fv(glGetUniformLocation(obj.program, "camera_pos"), 1, &camera_pos[0]);
-		glUniform3fv(glGetUniformLocation(obj.program, "camera_look"), 1, &camera_look[0]);
-		glUniform1i(glGetUniformLocation(obj.program, "lights_amount"), lights_amount);
-		glUniform3fv(glGetUniformLocation(obj.program, "light_colors"), light_colors.size(), &light_colors[0][0]);
+		glUniform3fv(glGetUniformLocation(obj.program, "raw_camera_look"), 1, &camera_look[0]);
+		glUniform1i(glGetUniformLocation(obj.program, "lights_amount"), light_colors.size());
+		glUniform4fv(glGetUniformLocation(obj.program, "light_colors"), light_colors.size(), &light_colors[0][0]);
 		glUniform3fv(glGetUniformLocation(obj.program, "light_positions"), light_positions.size(), &light_positions[0][0]);
 		// Draw
 		glDrawArrays(GL_TRIANGLES, 0, obj.triangles_amount);
@@ -430,6 +465,7 @@ public:
 			glDeleteBuffers(1, &obj.color);
 			glDeleteBuffers(1, &obj.normal);
 			glDeleteProgram(obj.program);
+			glDeleteTextures(1, &obj.texture);
 		}
 		glDeleteVertexArrays(1, &VertexArrayID);
 		// Close OpenGL window and terminate GLFW
@@ -484,17 +520,16 @@ public:
 	}
 
 	// ONLY MAX_LIGHTS LIGHTS CAN BE AVALIABLE SIMULTANEOUSLY OTHERWISE UB
-	////
 	void add_light(size_t object, glm::vec3 color, GLfloat intensity) {
-		
+		objects[object].light_color = color;
+		objects[object].light_intensity = intensity;
 	}
 
-	////
 	void remove_light(size_t object) {
-
+		objects[object].light_color = glm::vec3(0);
+		objects[object].light_intensity = 0;
 	}
 
-	////
 	size_t add_object(MyObjectRaw obj, std::string label) {
 		GLuint matrixID = glGetUniformLocation(shaders[obj.program_id], "MVP");
 
@@ -516,8 +551,8 @@ public:
 		new_object.texture = textures[obj.texture_id];
 		new_object.matrix = matrixID;
 		new_object.vertex = vertexBufferID;
-		new_object.normal = normalBufferID;
 		new_object.color = colorBufferID;
+		new_object.normal = normalBufferID;
 		new_object.is_transparent = obj.is_transparent;
 		new_object.collider_radius = obj.collider_radius;
 		new_object.is_texture_instead_of_color = obj.is_texture_instead_of_color;
@@ -528,10 +563,10 @@ public:
 		return objects.size() - 1;
 	}
 
-	////
 	void update() {
 		recalculate_view();
 		recalculate_projection();
+		recalculate_lights();
 
 		// Clear screen
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -571,6 +606,15 @@ public:
 		glfwPollEvents();
 	}
 
+	void despawn_far() {
+		for (size_t obj = 0; obj != objects.size(); ++obj) {
+			if (glm::distance(objects[obj].translation, camera_pos) >= DESPAWN_DISTANCE_IN_MAX_DISTANCE * projection_dist_max) {
+				remove_light(obj);
+				objects[obj].is_deleted = true;
+			}
+		}
+	}
+
 	void save(const std::string& filename) {
 		std::ofstream file_to_save(filename, std::ofstream::out);
 		file_to_save << "[" << cwd << std::endl;
@@ -581,6 +625,7 @@ public:
 		file_to_save << projection_dist_max << std::endl;
 		file_to_save << shaders << textures;
 		file_to_save << objects;
+		file_to_save << light_positions << light_colors;
 		file_to_save << camera_pos << camera_look << camera_head << projection << view;
 		file_to_save.close();
 		printf("SAVE IS SUCCESFULL\n");
@@ -596,6 +641,7 @@ public:
 		file_to_load >> projection_dist_max;
 		file_to_load >> shaders >> textures;
 		file_to_load >> objects;
+		file_to_load >> light_positions >> light_colors;
 		file_to_load >> camera_pos >> camera_look >> camera_head >> projection >> view;
 		file_to_load.close();
 		printf("LOAD IS SUCCESFULL\n");
@@ -726,10 +772,9 @@ int main(int argc, char* argv[])
 
 
 	// load shaders
-	size_t shader_fireball = myScene.load_shader("shaders/Fireball");
-	size_t shader_pyramid_enemy = myScene.load_shader("shaders/PyramidEnemy");
+	size_t shader_texture_basic = myScene.load_shader("shaders/TextureBasic");
+	size_t shader_color_light = myScene.load_shader("shaders/ColorLight");
 	size_t shader_fireball_hit = myScene.load_shader("shaders/FireballHit");
-	size_t shader_sky = myScene.load_shader("shaders/Sky");
 
 	// load textures
 	size_t texture_uv_fireball = myScene.load_texture("textures/fireball.bmp");
@@ -740,18 +785,18 @@ int main(int argc, char* argv[])
 	std::vector<GLfloat> sky_vert = get_vert_sphere(99.0f, 32, 64);
 	std::vector<GLfloat> sky_uv = get_uv_sphere(sky_vert);
 	MyObjectRaw sky_raw(sky_vert, false, 99.0f);
-	sky_raw.set_texture(texture_uv_sky, "textureSamplerSky", sky_uv, shader_sky);
+	sky_raw.set_texture(texture_uv_sky, "textureSamplerSky", sky_uv, shader_texture_basic);
 
 	// fireball
 	std::vector<GLfloat> fireball_vert = get_vert_sphere(0.5, 16, 32);
 	std::vector<GLfloat> fireball_uv = get_uv_sphere(fireball_vert);
 	MyObjectRaw fireball_raw(fireball_vert, false, 0.5);
-	fireball_raw.set_texture(texture_uv_fireball, "textureSamplerFireball", fireball_uv, shader_fireball);
+	fireball_raw.set_texture(texture_uv_fireball, "textureSamplerFireball", fireball_uv, shader_texture_basic);
 
 	////
 	// fireball hit sphere
-	std::vector<GLfloat> fireball_hit_vert = get_vert_sphere(0.25, 4, 8);
-	std::vector<GLfloat> fireball_hit_col = get_color_simple(fireball_hit_vert, {0, 1, 0});
+	std::vector<GLfloat> fireball_hit_vert = get_vert_sphere(0.25, 16, 32);
+	std::vector<GLfloat> fireball_hit_col = get_color_simple(fireball_hit_vert, {1, 0.2, 0.2});
 	MyObjectRaw fireball_hit_raw(fireball_hit_vert, true, 0.25);
 	fireball_hit_raw.set_colors(fireball_hit_col, shader_fireball_hit);
 
@@ -759,16 +804,17 @@ int main(int argc, char* argv[])
 	/*std::vector<GLfloat> pyramid_enemy_vert = vector_from_file(cwd + "models/pyramid.vert");
 	std::vector<GLfloat> pyramid_enemy_col = vector_from_file(cwd + "models/pyramid.col");
 	MyObjectRaw pyramid_enemy_raw(pyramid_enemy_vert, false, sqrtf(3) / 2);
-	pyramid_enemy_raw.set_colors(pyramid_enemy_col, shader_pyramid_enemy);*/
+	pyramid_enemy_raw.set_colors(pyramid_enemy_col, shader_color_light);*/
 	std::vector<GLfloat> pyramid_enemy_vert = get_vert_sphere(sqrtf(3), 128, 256);
-	std::vector<GLfloat> pyramid_enemy_col = get_color_simple(pyramid_enemy_vert, {1, 1, 1});
-	MyObjectRaw pyramid_enemy_raw(pyramid_enemy_vert, false, sqrtf(3) / 2);
-	pyramid_enemy_raw.set_colors(pyramid_enemy_col, shader_pyramid_enemy);
+	std::vector<GLfloat> pyramid_enemy_col = get_color_simple(pyramid_enemy_vert, {1, 0.5, 1});
+	MyObjectRaw pyramid_enemy_raw(pyramid_enemy_vert, false, sqrtf(3));
+	pyramid_enemy_raw.set_colors(pyramid_enemy_col, shader_color_light);
 
 
 	myScene.add_object(sky_raw, TYPE_SKY);
+	myScene.set_sky_light(SKY_LIGHT_COLOR);
+	myScene.add_directional_light(MOON_LIGHT_DIRECTION, MOON_LIGHT_COLOR, MOON_LIGHT_LABEL);
 	myScene.add_object(fireball_hit_raw, TYPE_FIREBALL_HIT);
-	const int MAX_EFFECT_FIREBALL_HIT = 30;
 	int effect_fireball_hit = -1;
 
 	long long ticks = 0;
@@ -778,6 +824,7 @@ int main(int argc, char* argv[])
 	long long last_frame_time = 0;
 	bool save_button_was_pressed = false;
 	bool load_button_was_pressed = false;
+	bool object_movement_enabled = true;
 	do {
 		float delta_time = current_ms() - last_frame_time;
 		last_frame_time = current_ms();
@@ -819,7 +866,9 @@ int main(int argc, char* argv[])
 
 
 		// delete objects
-		bool boom = false;
+		myScene.despawn_far();
+		// collide
+		glm::vec3 boom;
 		auto fireball = sphere_fireballs.begin();
 		while (fireball != sphere_fireballs.end()) {
 			auto enemy = pyramid_enemies.begin();
@@ -827,7 +876,7 @@ int main(int argc, char* argv[])
 				GLfloat dist = distance(myScene[*enemy].translation, myScene[*fireball].translation);
 				GLfloat coll = myScene[*enemy].get_collider_radius() + myScene[*fireball].get_collider_radius();
 				if (dist < coll) {
-					boom = true;
+					boom = myScene[*fireball].translation;
 					myScene[*fireball].is_deleted = true;
 					myScene[*enemy].is_deleted = true;
 					myScene.remove_light(*fireball);
@@ -837,7 +886,7 @@ int main(int argc, char* argv[])
 				}
 				++enemy;
 			}
-			if (boom) break;
+			if (boom != glm::vec3()) break;
 			++fireball;
 		}
 
@@ -905,26 +954,31 @@ int main(int argc, char* argv[])
 
 
 		// Change models
-		for (size_t fireball : sphere_fireballs) {
-			myScene[fireball].rotation_angle += FIREBALL_ROTATION_RATE * delta_time;
-			myScene[fireball].translation += myScene[fireball].speed * delta_time;
-		}
-		for (size_t enemy : pyramid_enemies) {
-			myScene[enemy].rotation_angle += PYRAMID_ENEMY_ROTATION_RATE * delta_time;
-			myScene[enemy].translation += myScene[enemy].speed * delta_time;
+		if (glfwGetKey(window, KEY_STOP_OBJECT_MOVEMENT) == GLFW_PRESS) object_movement_enabled = false;
+		if (glfwGetKey(window, KEY_RESUME_OBJECT_MOVEMENT) == GLFW_PRESS) object_movement_enabled = true;
+		if (object_movement_enabled) {
+			for (size_t fireball : sphere_fireballs) {
+				myScene[fireball].rotation_angle += FIREBALL_ROTATION_RATE * delta_time;
+				myScene[fireball].translation += myScene[fireball].speed * delta_time;
+			}
+			for (size_t enemy : pyramid_enemies) {
+				myScene[enemy].rotation_angle += PYRAMID_ENEMY_ROTATION_RATE * delta_time;
+				myScene[enemy].translation += myScene[enemy].speed * delta_time;
+			}
 		}
 		myScene[sky].translation = myScene.camera_pos;
 
 
 		// Effects
-		if (boom) {
+		if (boom != glm::vec3()) {
 			effect_fireball_hit = MAX_EFFECT_FIREBALL_HIT;
+			myScene[fireball_hit].is_deleted = false;
+			myScene[fireball_hit].translation = boom;
 		}
 		// Effect of fireball
 		if (effect_fireball_hit >= 0) {
 			--effect_fireball_hit;
-			myScene[fireball_hit].is_deleted = false;
-			myScene[fireball_hit].translation = myScene.camera_pos;
+			myScene[fireball_hit].scale = glm::vec3(glm::pow(10, 1 - effect_fireball_hit * 1.0f / MAX_EFFECT_FIREBALL_HIT));
 		} else {
 			myScene[fireball_hit].is_deleted = true;
 		}

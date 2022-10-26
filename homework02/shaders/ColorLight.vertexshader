@@ -1,0 +1,76 @@
+#version 330 core
+#define MAX_LIGHTS 256
+
+// Input vertex data, different for all executions of this shader.
+layout(location = 0) in vec3 vertexPosition_modelspace;
+layout(location = 1) in vec3 vertexColor;
+layout(location = 2) in vec3 vertexNormal_modelspace;
+
+// Output data ; will be interpolated for each fragment.
+out vec3 fragmentColor;
+
+// Values that stay constant for the whole mesh.
+uniform mat4 MVP;
+uniform mat4 model_matrix;
+uniform mat4 model_rotation_matrix;
+uniform vec3 camera_pos;
+uniform vec3 raw_camera_look;
+uniform int lights_amount;
+uniform vec4 light_colors[MAX_LIGHTS];
+uniform vec3 light_positions[MAX_LIGHTS];
+
+void main() {
+	const float AMBIENT_COEFF = 0.1;
+	const float DIFFUSION_COEFF = 2.0;
+	const float SPECULAR_COEFF = 2.0;
+	const float SPECULAR_POWER = 128.0;
+	const vec4 MOON_LIGHT_COLOR = vec4(0.1, 0.1, 0.2, 1);
+	const vec3 MOON_LIGHT_DIRECTION = vec3(0, 3, -1);
+
+	gl_Position =  MVP * vec4(vertexPosition_modelspace, 1);
+
+	vec3 color = vec3(0.0, 0.0, 0.0); // blue sky
+	vec3 vertex_position = vec3(model_matrix * vec4(vertexPosition_modelspace, 1));
+	vec3 vertex_normal = normalize(vec3(model_rotation_matrix * vec4(vertexNormal_modelspace, 1)));
+	vec3 camera_look = normalize(raw_camera_look);
+
+	// point lights
+	for (int light = 0; light < MAX_LIGHTS; ++light) {
+		if (light == lights_amount) break;
+		float attenuation = 1.0f / sqrt(distance(light_positions[light], vertex_position));
+		vec3 light_direction = normalize(vertex_position - light_positions[light]);
+		// ambient
+		float ambient = AMBIENT_COEFF;
+		// diffuse
+		float diffuse = DIFFUSION_COEFF * dot(-light_direction, vertex_normal);
+		if (diffuse < 0.0f) diffuse = 0.0f;
+		// specular
+		vec3 reflect_direction = vec3(0.0f);
+		if (dot(-light_direction, vertex_normal) > 0.0f) reflect_direction = normalize(reflect(-light_direction, vertex_normal));
+		float specular = dot(normalize(vertex_position - camera_pos), reflect_direction);
+		if (specular <= 0.0f) specular = 0.0f;
+		else specular = SPECULAR_COEFF * pow(specular, SPECULAR_POWER);
+		// result
+		color += light_colors[light][3] * vec3(light_colors[light]) * attenuation * (diffuse + specular + ambient);
+	}
+	// line light
+	float attenuation = 1.0f;
+	vec3 light_direction = normalize(MOON_LIGHT_DIRECTION);
+	// ambient
+	float ambient = AMBIENT_COEFF;
+	// diffuse
+	float diffuse = DIFFUSION_COEFF * dot(-light_direction, vertex_normal);
+	if (diffuse < 0.0f) diffuse = 0.0f;
+	// specular
+	vec3 reflect_direction = vec3(0.0f);
+	if (dot(-light_direction, vertex_normal) > 0.0f) reflect_direction = normalize(reflect(-light_direction, vertex_normal));
+	float specular = dot(normalize(vertex_position - camera_pos), reflect_direction);
+	if (specular <= 0.0f) specular = 0.0f;
+	else specular = SPECULAR_COEFF * pow(specular, SPECULAR_POWER);
+	// result
+	color += MOON_LIGHT_COLOR[3] * vec3(MOON_LIGHT_COLOR) * attenuation * (diffuse + specular + ambient);
+
+	color = min(color, 1);
+	color = max(color, 0);
+	fragmentColor = color * vertexColor;
+}
