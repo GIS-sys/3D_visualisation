@@ -1,12 +1,6 @@
-// MEDIUM
-// add moon light
-// load save in the next session? add_object - bind_buffer possibly
-// clear memory when loading
-
 // LOW
-// delete objects if they are is_deleted once in a while; add is_shown to disable without deleting
 // key pressed / key was pressed to myScene
-// clear all memory in the end (destructor) (IS OK?)
+// delete objects if they are is_deleted once in a while; add is_shown to disable without deleting
 // sort transparent?
 
 
@@ -202,12 +196,29 @@ std::ifstream& operator>>(std::ifstream& ifs, std::vector<std::string>& vec) {
 }
 
 
+// after creating need to use either of set_ functions
 struct MyObjectRaw {
+private:
+	void bind_arrays() {
+		glGenBuffers(1, &vertexBufferID);
+		glBindBuffer(GL_ARRAY_BUFFER, vertexBufferID);
+		glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(GLfloat), verts.data(), GL_STATIC_DRAW);
+		glGenBuffers(1, &colorBufferID);
+		glBindBuffer(GL_ARRAY_BUFFER, colorBufferID);
+		glBufferData(GL_ARRAY_BUFFER, colors.size() * sizeof(GLfloat), colors.data(), GL_STATIC_DRAW);
+		glGenBuffers(1, &normalBufferID);
+		glBindBuffer(GL_ARRAY_BUFFER, normalBufferID);
+		glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(GLfloat), normals.data(), GL_STATIC_DRAW);
+	}
+
+public:
 	std::vector<GLfloat> verts;
 	bool is_transparent = false;
-
 	std::vector<GLfloat> colors;
 	std::vector<GLfloat> normals;
+	GLuint vertexBufferID;
+	GLuint colorBufferID;
+	GLuint normalBufferID;
 	GLuint program_id = 0;
 	GLuint texture_id = 0;
 	std::string sampler;
@@ -243,6 +254,7 @@ struct MyObjectRaw {
 		is_texture_instead_of_color = false;
 		colors = colors_buf;
 		program_id = new_program_id;
+		bind_arrays();
 	}
 
 	void set_texture(GLuint new_texture_id, std::string new_sampler, std::vector<GLfloat> colors_buf, size_t new_program_id) {
@@ -251,6 +263,7 @@ struct MyObjectRaw {
 		colors = colors_buf;
 		program_id = new_program_id;
 		sampler = new_sampler;
+		bind_arrays();
 	}
 };
 
@@ -578,26 +591,13 @@ public:
 	size_t add_object(MyObjectRaw obj, std::string label) {
 		GLuint matrixID = glGetUniformLocation(shaders[obj.program_id], "MVP");
 
-		GLuint vertexBufferID;
-		glGenBuffers(1, &vertexBufferID);
-		glBindBuffer(GL_ARRAY_BUFFER, vertexBufferID);
-		glBufferData(GL_ARRAY_BUFFER, obj.verts.size() * sizeof(GLfloat), obj.verts.data(), GL_STATIC_DRAW);
-		GLuint colorBufferID;
-		glGenBuffers(1, &colorBufferID);
-		glBindBuffer(GL_ARRAY_BUFFER, colorBufferID);
-		glBufferData(GL_ARRAY_BUFFER, obj.colors.size() * sizeof(GLfloat), obj.colors.data(), GL_STATIC_DRAW);
-		GLuint normalBufferID;
-		glGenBuffers(1, &normalBufferID);
-		glBindBuffer(GL_ARRAY_BUFFER, normalBufferID);
-		glBufferData(GL_ARRAY_BUFFER, obj.normals.size() * sizeof(GLfloat), obj.normals.data(), GL_STATIC_DRAW);
-
 		MyObject new_object;
 		new_object.program = shaders[obj.program_id];
 		new_object.texture = textures[obj.texture_id];
 		new_object.matrix = matrixID;
-		new_object.vertex = vertexBufferID;
-		new_object.color = colorBufferID;
-		new_object.normal = normalBufferID;
+		new_object.vertex = obj.vertexBufferID;
+		new_object.color = obj.colorBufferID;
+		new_object.normal = obj.normalBufferID;
 		new_object.is_transparent = obj.is_transparent;
 		new_object.collider_radius = obj.collider_radius;
 		new_object.is_texture_instead_of_color = obj.is_texture_instead_of_color;
