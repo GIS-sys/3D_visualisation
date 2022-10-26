@@ -1,4 +1,6 @@
 // LOW
+// MVP for ui
+// bad memory clearment - clear_ui deletes
 // key pressed / key was pressed to myScene
 // delete objects if they are is_deleted once in a while; add is_shown to disable without deleting
 // sort transparent?
@@ -39,12 +41,12 @@ const std::string TYPE_PYRAMID_ENEMY = "pyramid_enemy";
 const std::string MOON_LIGHT_LABEL = "moon";
 const glm::vec4 MOON_LIGHT_COLOR = {0.1, 0.1, 0.2, 1.0};
 const glm::vec3 MOON_LIGHT_DIRECTION = {0.0, 3.0, -1.0};
-const glm::vec3 SKY_LIGHT_COLOR = {0.0, 0.0, 0.0};
+const glm::vec3 SKY_LIGHT_COLOR = {0.05, 0.05, 0.01};
 const glm::vec3 FIREBALL_LIGHT_COLOR = {1.0, 0.7, 0.0};
 const float FIREBALL_LIGHT_INTENSITY = 1.0;
-const long long ENEMY_SPAWN_DELTA = 1500;
-const long long ENEMY_SPAWN_RADIUS = 10;
-const long long FIREBALL_COOLDOWN = 300;
+const long long ENEMY_SPAWN_DELTA = 500;
+const long long ENEMY_SPAWN_RADIUS = 20;
+const long long FIREBALL_COOLDOWN = 200;
 const int MAX_EFFECT_FIREBALL_HIT = 10;
 const long long SCREEN_WIDTH = 1024;
 const long long SCREEN_HEIGHT = 1024;
@@ -52,12 +54,13 @@ const GLfloat PYRAMID_ENEMY_SPEED = 0.01f;
 const GLfloat PYRAMID_ENEMY_ROTATION_RATE = 0.001f;
 const GLfloat FIREBALL_SPEED = 0.05f;
 const GLfloat FIREBALL_ROTATION_RATE = 0.005f;
-const GLfloat HUMAN_SPEED = 0.005f;
+const GLfloat HUMAN_SPEED = 0.01f;
 const GLfloat HUMAN_SPRINT_SPEED = 0.05f;
 const GLfloat MOUSE_SPEED = 0.002f;
 const GLfloat PITCH_SPEED = 0.003f;
 const GLfloat DESPAWN_DISTANCE_IN_MAX_DISTANCE = 2.0f;
 const std::string FILENAME_SAVE = "/home/gordei/tmp/file";
+const GLfloat DIGIT_SCALE_RATE = 0.7f;
 
 const int KEY_EXIT = GLFW_KEY_ESCAPE;
 const int KEY_FORWARD = GLFW_KEY_W;
@@ -275,7 +278,6 @@ private:
 	public:
 		GLuint program = 0;
 		GLuint texture = 0;
-		GLuint matrix = 0;
 		GLuint vertex = 0;
 		GLuint normal = 0;
 		GLuint color = 0;
@@ -320,7 +322,6 @@ private:
 			ofs << obj.collider_radius << std::endl;
 			ofs << obj.program << std::endl;
 			ofs << obj.texture << std::endl;
-			ofs << obj.matrix << std::endl;
 			ofs << obj.vertex << std::endl;
 			ofs << obj.normal << std::endl;
 			ofs << obj.color << std::endl;
@@ -341,7 +342,6 @@ private:
 			ifs >> obj.collider_radius;
 			ifs >> obj.program;
 			ifs >> obj.texture;
-			ifs >> obj.matrix;
 			ifs >> obj.vertex;
 			ifs >> obj.normal;
 			ifs >> obj.color;
@@ -364,6 +364,7 @@ private:
 	std::string cwd;
 	GLuint VertexArrayID;
 	std::vector<MyObject> objects;
+	std::vector<MyObject> uiobjects;
 	std::vector<GLuint> shaders;
 	std::vector<GLuint> textures;
 
@@ -396,7 +397,7 @@ private:
 		}
 	}
 
-	void update_single_object(MyObject& obj) {
+	void update_single_object(const MyObject& obj) {
 		glm::mat4 model_rotation = obj.calculate_rotation_matrix();
 		glm::mat4 model = obj.calculate_model_matrix();
 		glm::mat4 MVP = projection * view * model;
@@ -424,8 +425,7 @@ private:
 		glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
 		// Use shader
 		glUseProgram(obj.program);
-		glUniformMatrix4fv(obj.matrix, 1, GL_FALSE, &MVP[0][0]);
-		// Use many lighting parameters
+		glUniformMatrix4fv(glGetUniformLocation(obj.program, "MVP"), 1, GL_FALSE, &MVP[0][0]);
 		glUniformMatrix4fv(glGetUniformLocation(obj.program, "model_matrix"), 1, GL_FALSE, &model[0][0]);
 		glUniformMatrix4fv(glGetUniformLocation(obj.program, "model_rotation_matrix"), 1, GL_FALSE, &model_rotation[0][0]);
 		glUniform3fv(glGetUniformLocation(obj.program, "camera_pos"), 1, &camera_pos[0]);
@@ -437,6 +437,42 @@ private:
 		glUniform4fv(glGetUniformLocation(obj.program, "directional_light_colors"), directional_light_colors.size(), &directional_light_colors[0][0]);
 		glUniform3fv(glGetUniformLocation(obj.program, "directional_light_directions"), directional_light_directions.size(), &directional_light_directions[0][0]);
 		glUniform3fv(glGetUniformLocation(obj.program, "sky_light_color"), 1, &sky_light_color[0]);
+
+		// Draw
+		glDrawArrays(GL_TRIANGLES, 0, obj.triangles_amount);
+	}
+
+	void update_single_uiobject(const MyObject& obj) {
+		glm::mat4 model = obj.calculate_model_matrix();
+		glm::mat4 MVP = projection * model;
+		//MVP = projection * view * model;
+		//MVP = projection * glm::lookAt(camera_pos, {-1.0f, 0.0f, 0.0f}, camera_head) * model;
+
+		if (obj.is_texture_instead_of_color) {
+			// Get a handle for our "...Sampler" uniform
+			GLuint TextureID  = glGetUniformLocation(obj.program, obj.sampler.c_str());
+			// Bind our texture in Texture Unit 0
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, obj.texture);
+			// Set our "myTextureSampler" sampler to use Texture Unit 0
+			glUniform1i(TextureID, 0);
+		}
+
+		// Set [coordinates] buffer ID: 0, size: 3, normalised: false
+		glBindBuffer(GL_ARRAY_BUFFER, obj.vertex);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+		// Set [colors] buffer ID: 1, size: 3, normalised: false
+		int color_size = 3;
+		if (obj.is_texture_instead_of_color) color_size = 2;
+		glBindBuffer(GL_ARRAY_BUFFER, obj.color);
+		glVertexAttribPointer(1, color_size, GL_FLOAT, GL_FALSE, 0, (void*)0);
+		// Set [normals] buffer ID: 2, size: 3, normalised: false
+		glBindBuffer(GL_ARRAY_BUFFER, obj.normal);
+		glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+		// Use shader
+		glUseProgram(obj.program);
+		glUniformMatrix4fv(glGetUniformLocation(obj.program, "MVP"), 1, GL_FALSE, &MVP[0][0]);
+		glUniformMatrix4fv(glGetUniformLocation(obj.program, "model_matrix"), 1, GL_FALSE, &model[0][0]);
 
 		// Draw
 		glDrawArrays(GL_TRIANGLES, 0, obj.triangles_amount);
@@ -589,12 +625,9 @@ public:
 	}
 
 	size_t add_object(MyObjectRaw obj, std::string label) {
-		GLuint matrixID = glGetUniformLocation(shaders[obj.program_id], "MVP");
-
 		MyObject new_object;
 		new_object.program = shaders[obj.program_id];
 		new_object.texture = textures[obj.texture_id];
-		new_object.matrix = matrixID;
 		new_object.vertex = obj.vertexBufferID;
 		new_object.color = obj.colorBufferID;
 		new_object.normal = obj.normalBufferID;
@@ -641,6 +674,16 @@ public:
 		glDisable(GL_BLEND);
 		// End of drawing transparent things
 
+		// Start of drawing UI things
+		glDepthMask(GL_FALSE);
+		glEnable(GL_BLEND);
+		for (auto& obj : uiobjects) {
+			update_single_uiobject(obj);
+		}
+		glDepthMask(GL_TRUE);
+		glDisable(GL_BLEND);
+		// End of drawing UI things
+
 		glDisableVertexAttribArray(0);
 		glDisableVertexAttribArray(1);
 		glDisableVertexAttribArray(2);
@@ -660,6 +703,28 @@ public:
 		}
 	}
 
+	void clear_ui() {
+		uiobjects.clear();
+	}
+
+	void add_ui(MyObjectRaw obj, const glm::vec3& pos, const glm::vec3& scale, const glm::vec3& rot_axis, GLfloat rot_angle) {
+		MyObject new_object;
+		new_object.program = shaders[obj.program_id];
+		new_object.texture = textures[obj.texture_id];
+		new_object.vertex = obj.vertexBufferID;
+		new_object.color = obj.colorBufferID;
+		new_object.normal = obj.normalBufferID;
+		new_object.is_texture_instead_of_color = obj.is_texture_instead_of_color;
+		new_object.triangles_amount = obj.verts.size() / 3;
+
+		new_object.translation = pos;
+		new_object.rotation_angle = rot_angle;
+		new_object.rotation_axis = rot_axis;
+		new_object.scale = scale;
+
+		uiobjects.push_back(new_object);
+	}
+
 	void save(const std::string& filename) {
 		std::ofstream file_to_save(filename, std::ofstream::out);
 		file_to_save << "[" << cwd << std::endl;
@@ -669,7 +734,7 @@ public:
 		file_to_save << projection_dist_min << std::endl;
 		file_to_save << projection_dist_max << std::endl;
 		file_to_save << shaders << textures;
-		file_to_save << objects;
+		file_to_save << objects << uiobjects;
 		file_to_save << point_light_positions << point_light_colors;
 		file_to_save << directional_light_directions << directional_light_colors;
 		file_to_save << directional_light_labels;
@@ -688,7 +753,7 @@ public:
 		file_to_load >> projection_dist_min;
 		file_to_load >> projection_dist_max;
 		file_to_load >> shaders >> textures;
-		file_to_load >> objects;
+		file_to_load >> objects >> uiobjects;
 		file_to_load >> point_light_positions >> point_light_colors;
 		file_to_load >> directional_light_directions >> directional_light_colors;
 		file_to_load >> directional_light_labels;
@@ -696,8 +761,6 @@ public:
 		file_to_load >> camera_pos >> camera_look >> camera_head >> projection >> view;
 		file_to_load.close();
 		printf("LOAD IS SUCCESFULL\n");
-		////
-		save(filename + "loaded");
 	}
 };
 
@@ -811,8 +874,8 @@ int main(int argc, char* argv[])
 	MyScene myScene(cwd);
 
 	// configure initial scene position
-	// View: Angle of view: 45, ratio: 1:1, display distance: 0.1 <-> 100
-	myScene.projection_angle = glm::radians(45.0f);
+	// View: Angle of view: 60, ratio: 1:1, display distance: 0.1 <-> 128
+	myScene.projection_angle = glm::radians(60.0f);
 	myScene.projection_ratio = SCREEN_WIDTH * 1.0f / SCREEN_HEIGHT;
 	myScene.projection_dist_min = 0.1f;
 	myScene.projection_dist_max = 128.0f;
@@ -826,6 +889,7 @@ int main(int argc, char* argv[])
 	size_t shader_texture_basic = myScene.load_shader("shaders/TextureBasic");
 	size_t shader_color_light = myScene.load_shader("shaders/ColorLight");
 	size_t shader_fireball_hit = myScene.load_shader("shaders/FireballHit");
+	size_t shader_color_ui = myScene.load_shader("shaders/ColorUI");
 
 	// load textures
 	size_t texture_uv_fireball = myScene.load_texture("textures/fireball.bmp");
@@ -833,9 +897,9 @@ int main(int argc, char* argv[])
 
 
 	// sky
-	std::vector<GLfloat> sky_vert = get_vert_sphere(99.0f, 32, 64);
+	std::vector<GLfloat> sky_vert = get_vert_sphere(myScene.projection_dist_max - 1, 32, 64);
 	std::vector<GLfloat> sky_uv = get_uv_sphere(sky_vert);
-	MyObjectRaw sky_raw(sky_vert, false, 99.0f);
+	MyObjectRaw sky_raw(sky_vert, false, myScene.projection_dist_max - 1);
 	sky_raw.set_texture(texture_uv_sky, "textureSamplerSky", sky_uv, shader_texture_basic);
 
 	// fireball
@@ -844,7 +908,6 @@ int main(int argc, char* argv[])
 	MyObjectRaw fireball_raw(fireball_vert, false, 0.5);
 	fireball_raw.set_texture(texture_uv_fireball, "textureSamplerFireball", fireball_uv, shader_texture_basic);
 
-	////
 	// fireball hit sphere
 	std::vector<GLfloat> fireball_hit_vert = get_vert_sphere(0.25, 16, 32);
 	std::vector<GLfloat> fireball_hit_col = get_color_simple(fireball_hit_vert, {1, 0.2, 0.2});
@@ -852,14 +915,24 @@ int main(int argc, char* argv[])
 	fireball_hit_raw.set_colors(fireball_hit_col, shader_fireball_hit);
 
 	// enemy
-	/*std::vector<GLfloat> pyramid_enemy_vert = vector_from_file(cwd + "models/pyramid.vert");
+	std::vector<GLfloat> pyramid_enemy_vert = vector_from_file(cwd + "models/pyramid.vert");
 	std::vector<GLfloat> pyramid_enemy_col = vector_from_file(cwd + "models/pyramid.col");
 	MyObjectRaw pyramid_enemy_raw(pyramid_enemy_vert, false, sqrtf(3) / 2);
-	pyramid_enemy_raw.set_colors(pyramid_enemy_col, shader_color_light);*/
-	std::vector<GLfloat> pyramid_enemy_vert = get_vert_sphere(sqrtf(3), 128, 256);
+	pyramid_enemy_raw.set_colors(pyramid_enemy_col, shader_color_light); //*/
+	/*std::vector<GLfloat> pyramid_enemy_vert = get_vert_sphere(sqrtf(3), 128, 256);
 	std::vector<GLfloat> pyramid_enemy_col = get_color_simple(pyramid_enemy_vert, {1, 0.5, 1});
 	MyObjectRaw pyramid_enemy_raw(pyramid_enemy_vert, false, sqrtf(3));
-	pyramid_enemy_raw.set_colors(pyramid_enemy_col, shader_color_light);
+	pyramid_enemy_raw.set_colors(pyramid_enemy_col, shader_color_light); //*/
+
+	// digits
+	std::vector<MyObjectRaw> digits_raw;
+	for (int i = 0; i < 10; ++i) {
+		std::vector<GLfloat> digit_vert = vector_from_file(cwd + "models/digits/digit" + (char)('0' + i) + ".vert");
+		std::vector<GLfloat> digit_col = vector_from_file(cwd + "models/digits/digit" + (char)('0' + i) + ".col");
+		MyObjectRaw digit_raw(digit_vert, false);
+		digit_raw.set_colors(digit_col, shader_color_ui);
+		digits_raw.push_back(digit_raw);
+	}
 
 
 	myScene.add_object(sky_raw, TYPE_SKY);
@@ -876,6 +949,7 @@ int main(int argc, char* argv[])
 	bool save_button_was_pressed = false;
 	bool load_button_was_pressed = false;
 	bool object_movement_enabled = true;
+	long long enemies_killed = 0;
 	do {
 		float delta_time = current_ms() - last_frame_time;
 		last_frame_time = current_ms();
@@ -892,10 +966,15 @@ int main(int argc, char* argv[])
 		double mouse_y_delta = 0;
 		glfwGetCursorPos(window, &mouse_x_delta, &mouse_y_delta);
 		glfwSetCursorPos(window, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
-		mouse_x_delta -= SCREEN_WIDTH / 2;
-		mouse_y_delta -= SCREEN_HEIGHT / 2;
-		mouse_x_delta *= MOUSE_SPEED;
-		mouse_y_delta *= MOUSE_SPEED;
+		if (ticks < 5) { // to stabilize cursor
+			mouse_x_delta = 0;
+			mouse_y_delta = 0;
+		} else {
+			mouse_x_delta -= SCREEN_WIDTH / 2;
+			mouse_y_delta -= SCREEN_HEIGHT / 2;
+			mouse_x_delta *= MOUSE_SPEED;
+			mouse_y_delta *= MOUSE_SPEED;
+		}
 
 
 		// get all objects from scene
@@ -1020,11 +1099,27 @@ int main(int argc, char* argv[])
 		myScene[sky].translation = myScene.camera_pos;
 
 
+		// Add UI
+		myScene.clear_ui();
+		std::string enemies_killed_str = std::to_string(enemies_killed);
+		enemies_killed_str = "0123456789" + enemies_killed_str;
+		float digit_delta = 1.0f / (enemies_killed_str.size() + 1);
+		float digit_scale_rate = digit_delta * DIGIT_SCALE_RATE;
+		for (int k = 0; k < enemies_killed_str.size(); ++k) {
+			int digit = (enemies_killed_str[k] - '0');
+			glm::vec3 digit_pos{-1.0f + digit_delta * (k + 0.5f), 1.0f - digit_delta * 0.5f, 0.0f};
+			glm::vec3 digit_scale(digit_scale_rate);
+			glm::vec3 digit_rotation_axis{0.0f, 0.0f, 1.0f};
+			GLfloat digit_rotation_angle = glm::sin(ticks * 0.01f) * 0.5f;
+			myScene.add_ui(digits_raw[digit], digit_pos, digit_scale, digit_rotation_axis, digit_rotation_angle);
+		}
+
 		// Effects
 		if (boom != glm::vec3()) {
 			effect_fireball_hit = MAX_EFFECT_FIREBALL_HIT;
 			myScene[fireball_hit].is_deleted = false;
 			myScene[fireball_hit].translation = boom;
+			++enemies_killed;
 		}
 		// Effect of fireball
 		if (effect_fireball_hit >= 0) {

@@ -24,10 +24,11 @@ uniform vec3 directional_light_directions[MAX_LIGHTS];
 uniform vec3 sky_light_color;
 
 vec3 gauroud_shading(vec3 light_direction, vec3 vertex_normal, vec3 vertex_position, vec4 light_color) {
-	const float AMBIENT_COEFF = 0.1;
+	const float AMBIENT_COEFF = 0.2;
 	const float DIFFUSION_COEFF = 2.0;
-	const float SPECULAR_COEFF = 2.0;
-	const float SPECULAR_POWER = 128.0;
+	const float SPECULAR_COEFF = 1.0;
+	const float SPECULAR_POWER = 16.0;
+	const float BRIGHTNESS = 2.0f;
 
 	// ambient
 	float ambient = AMBIENT_COEFF;
@@ -44,7 +45,7 @@ vec3 gauroud_shading(vec3 light_direction, vec3 vertex_normal, vec3 vertex_posit
 	else specular = SPECULAR_COEFF * pow(specular, SPECULAR_POWER);
 
 	// result
-	return light_color[3] * vec3(light_color) * (diffuse + specular + ambient);
+	return BRIGHTNESS * light_color[3] * vec3(light_color) * (diffuse + specular + ambient);
 }
 
 void main() {
