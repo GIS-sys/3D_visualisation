@@ -1,0 +1,13 @@
+* {
+    margin: 0;
+}
+
+.block {
+    width: 400px;
+    background-color: blueviolet;
+    padding: 20px;
+}
+
+#myid {
+    background-color: aqua;
+}
