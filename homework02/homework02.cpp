@@ -915,11 +915,11 @@ int main(int argc, char* argv[])
 	fireball_hit_raw.set_colors(fireball_hit_col, shader_fireball_hit);
 
 	// enemy
-	std::vector<GLfloat> pyramid_enemy_vert = vector_from_file(cwd + "models/pyramid.vert");
+	/*std::vector<GLfloat> pyramid_enemy_vert = vector_from_file(cwd + "models/pyramid.vert");
 	std::vector<GLfloat> pyramid_enemy_col = vector_from_file(cwd + "models/pyramid.col");
 	MyObjectRaw pyramid_enemy_raw(pyramid_enemy_vert, false, sqrtf(3) / 2);
 	pyramid_enemy_raw.set_colors(pyramid_enemy_col, shader_color_light); //*/
-	/*std::vector<GLfloat> pyramid_enemy_vert = get_vert_sphere(sqrtf(3), 64, 128);
+	std::vector<GLfloat> pyramid_enemy_vert = get_vert_sphere(sqrtf(3), 64, 128);
 	std::vector<GLfloat> pyramid_enemy_col = get_color_simple(pyramid_enemy_vert, {1, 0.5, 1});
 	MyObjectRaw pyramid_enemy_raw(pyramid_enemy_vert, false, sqrtf(3));
 	pyramid_enemy_raw.set_colors(pyramid_enemy_col, shader_color_light); //*/
