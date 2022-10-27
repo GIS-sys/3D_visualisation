@@ -80,6 +80,44 @@ set_target_properties(homework01 PROPERTIES XCODE_ATTRIBUTE_CONFIGURATION_BUILD_
 create_target_launcher(homework01 WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/homework01/")
 ###############################################################################
 
+###############################################################################
+# Homework 2
+add_executable(homework02
+	homework02/homework02.cpp
+	common/shader.cpp
+	common/shader.hpp
+	common/texture.cpp
+	common/texture.hpp
+	common/controls.cpp
+	common/controls.hpp
+
+)
+target_link_libraries(homework02
+	${ALL_LIBS}
+)
+# Xcode and Visual working directories
+set_target_properties(homework02 PROPERTIES XCODE_ATTRIBUTE_CONFIGURATION_BUILD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/homework02/")
+create_target_launcher(homework02 WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/homework02/")
+###############################################################################
+
+###############################################################################
+# My UI
+add_executable(MyVeryOwnUI
+	MyVeryOwnUI/main.cpp
+	common/shader.cpp
+	common/shader.hpp
+	common/texture.cpp
+	common/texture.hpp
+
+)
+target_link_libraries(MyVeryOwnUI
+	${ALL_LIBS}
+)
+# Xcode and Visual working directories
+set_target_properties(MyVeryOwnUI PROPERTIES XCODE_ATTRIBUTE_CONFIGURATION_BUILD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/MyVeryOwnUI/")
+create_target_launcher(MyVeryOwnUI WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/MyVeryOwnUI/")
+###############################################################################
+
 # Tutorial 1
 add_executable(tutorial01_first_window 
 	tutorial01_first_window/tutorial01.cpp
@@ -692,6 +730,18 @@ if (NOT ${CMAKE_GENERATOR} MATCHES "Xcode" )
 add_custom_command(
    TARGET homework01 POST_BUILD
    COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/homework01${CMAKE_EXECUTABLE_SUFFIX}" "${CMAKE_CURRENT_SOURCE_DIR}/homework01/"
+)
+###############################################################################
+###############################################################################
+add_custom_command(
+   TARGET homework02 POST_BUILD
+   COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/homework02${CMAKE_EXECUTABLE_SUFFIX}" "${CMAKE_CURRENT_SOURCE_DIR}/homework02/"
+)
+###############################################################################
+###############################################################################
+add_custom_command(
+   TARGET MyVeryOwnUI POST_BUILD
+   COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/MyVeryOwnUI${CMAKE_EXECUTABLE_SUFFIX}" "${CMAKE_CURRENT_SOURCE_DIR}/MyVeryOwnUI/"
 )
 ###############################################################################
 add_custom_command(

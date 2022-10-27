@@ -1,0 +1,78 @@
+#version 330 core
+#define MAX_LIGHTS 256
+
+// Input vertex data, different for all executions of this shader.
+layout(location = 0) in vec3 vertexPosition_modelspace;
+layout(location = 1) in vec3 vertexColor;
+layout(location = 2) in vec3 vertexNormal_modelspace;
+
+// Output data ; will be interpolated for each fragment.
+out vec3 fragmentColor;
+
+// Values that stay constant for the whole mesh.
+uniform mat4 MVP;
+uniform mat4 model_matrix;
+uniform mat4 model_rotation_matrix;
+uniform vec3 camera_pos;
+uniform vec3 raw_camera_look; // unused for now
+uniform int point_lights_amount;
+uniform vec4 point_light_colors[MAX_LIGHTS];
+uniform vec3 point_light_positions[MAX_LIGHTS];
+uniform int directional_lights_amount;
+uniform vec4 directional_light_colors[MAX_LIGHTS];
+uniform vec3 directional_light_directions[MAX_LIGHTS];
+uniform vec3 sky_light_color;
+
+vec3 gauroud_shading(vec3 light_direction, vec3 vertex_normal, vec3 vertex_position, vec4 light_color) {
+	const float AMBIENT_COEFF = 0.2;
+	const float DIFFUSION_COEFF = 2.0;
+	const float SPECULAR_COEFF = 1.0;
+	const float SPECULAR_POWER = 16.0;
+	const float BRIGHTNESS = 2.0f;
+
+	// ambient
+	float ambient = AMBIENT_COEFF;
+
+	// diffuse
+	float diffuse = DIFFUSION_COEFF * dot(-light_direction, vertex_normal);
+	if (diffuse < 0.0f) diffuse = 0.0f;
+
+	// specular
+	vec3 reflect_direction = vec3(0.0f);
+	if (dot(-light_direction, vertex_normal) > 0.0f) reflect_direction = normalize(reflect(-light_direction, vertex_normal));
+	float specular = dot(normalize(vertex_position - camera_pos), reflect_direction);
+	if (specular <= 0.0f) specular = 0.0f;
+	else specular = SPECULAR_COEFF * pow(specular, SPECULAR_POWER);
+
+	// result
+	return BRIGHTNESS * light_color[3] * vec3(light_color) * (diffuse + specular + ambient);
+}
+
+void main() {
+	
+
+	gl_Position =  MVP * vec4(vertexPosition_modelspace, 1);
+
+	vec3 color = sky_light_color; // blue sky
+	vec3 vertex_normal = normalize(vec3(model_rotation_matrix * vec4(vertexNormal_modelspace, 1)));
+	vec3 vertex_position = vec3(model_matrix * vec4(vertexPosition_modelspace, 1));
+
+	// point lights
+	for (int light = 0; light < MAX_LIGHTS; ++light) {
+		if (light == point_lights_amount) break;
+		float attenuation = 1.0f / sqrt(distance(point_light_positions[light], vertex_position));
+		vec3 light_direction = normalize(vertex_position - point_light_positions[light]);
+		color += attenuation * gauroud_shading(light_direction, vertex_normal, vertex_position, point_light_colors[light]);
+	}
+	// directional lights
+	for (int light = 0; light < MAX_LIGHTS; ++light) {
+		if (light == directional_lights_amount) break;
+		float attenuation = 1.0f;
+		vec3 light_direction = normalize(directional_light_directions[0]);
+		color += attenuation * gauroud_shading(light_direction, vertex_normal, vertex_position, directional_light_colors[light]);
+	}
+
+	color = min(color, 1);
+	color = max(color, 0);
+	fragmentColor = color * vertexColor;
+}
