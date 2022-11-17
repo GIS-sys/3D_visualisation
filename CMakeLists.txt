@@ -101,6 +101,46 @@ create_target_launcher(homework02 WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}
 ###############################################################################
 
 ###############################################################################
+# Homework 3
+add_executable(homework03
+	homework03/homework03.cpp
+	common/shader.cpp
+	common/shader.hpp
+	common/texture.cpp
+	common/texture.hpp
+	common/controls.cpp
+	common/controls.hpp
+
+)
+target_link_libraries(homework03
+	${ALL_LIBS}
+)
+# Xcode and Visual working directories
+set_target_properties(homework03 PROPERTIES XCODE_ATTRIBUTE_CONFIGURATION_BUILD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/homework03/")
+create_target_launcher(homework03 WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/homework03/")
+###############################################################################
+
+###############################################################################
+# raytrace
+add_executable(raytrace
+	raytrace/raytrace.cpp
+	common/shader.cpp
+	common/shader.hpp
+	common/texture.cpp
+	common/texture.hpp
+	common/controls.cpp
+	common/controls.hpp
+
+)
+target_link_libraries(raytrace
+	${ALL_LIBS}
+)
+# Xcode and Visual working directories
+set_target_properties(raytrace PROPERTIES XCODE_ATTRIBUTE_CONFIGURATION_BUILD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/raytrace/")
+create_target_launcher(raytrace WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/raytrace/")
+###############################################################################
+
+###############################################################################
 # My UI
 add_executable(MyVeryOwnUI
 	MyVeryOwnUI/main.cpp
@@ -736,6 +776,18 @@ add_custom_command(
 add_custom_command(
    TARGET homework02 POST_BUILD
    COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/homework02${CMAKE_EXECUTABLE_SUFFIX}" "${CMAKE_CURRENT_SOURCE_DIR}/homework02/"
+)
+###############################################################################
+###############################################################################
+add_custom_command(
+   TARGET homework03 POST_BUILD
+   COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/homework03${CMAKE_EXECUTABLE_SUFFIX}" "${CMAKE_CURRENT_SOURCE_DIR}/homework03/"
+)
+###############################################################################
+###############################################################################
+add_custom_command(
+   TARGET raytrace POST_BUILD
+   COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/raytrace${CMAKE_EXECUTABLE_SUFFIX}" "${CMAKE_CURRENT_SOURCE_DIR}/raytrace/"
 )
 ###############################################################################
 ###############################################################################
